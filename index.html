@@ -22,7 +22,7 @@
         .calculator-scroll-area { 
             overflow-y: auto; 
             height: 100%; 
-            padding-bottom: 6rem; /* Genug Platz für FAB + Puffer */
+            padding-bottom: 6rem; 
             max-width: 100%; 
             margin: 0 auto; 
             background-color: white; 
@@ -43,8 +43,8 @@
         /* WICHTIG für Mobile Drag & Drop */
         .drag-handle { 
             cursor: grab; 
-            padding: 1rem; /* Große Touch-Area */
-            touch-action: none; /* Verhindert Scrollen auf dem Handle */
+            padding: 1rem; 
+            touch-action: none; 
             color: #9ca3af;
         }
         .drag-handle:active { cursor: grabbing; color: #2563eb; }
@@ -99,8 +99,8 @@
         const BUFFER_MINUTES = 10;
         const INITIAL_START_TIME = "08:15";
         const DEFAULT_START_ADDRESS = "Michaelstein 18, 38889 Blankenburg"; 
-        const STORAGE_KEY_DATA = "tomtom_planner_data_v3"; // Version erhöht
-        const STORAGE_KEY_TAB_COUNT = "tomtom_planner_tab_count_v3";
+        const STORAGE_KEY_DATA = "tomtom_planner_data_v4"; // Version erhöht
+        const STORAGE_KEY_TAB_COUNT = "tomtom_planner_tab_count_v4";
 
         // Globale Variablen
         let currentMap = null;
@@ -135,7 +135,6 @@
             const indicator = document.getElementById('save-indicator');
             if(indicator) {
                 indicator.classList.remove('opacity-0');
-                // Timeout clearen falls vorhanden, damit es nicht flackert
                 if(indicator.timeout) clearTimeout(indicator.timeout);
                 indicator.timeout = setTimeout(() => indicator.classList.add('opacity-0'), 1500);
             }
@@ -521,6 +520,14 @@
 
             function render() {
                 updateDatalist();
+                
+                // === WICHTIGER FIX: Sortable Instanz zerstören, bevor der DOM-Inhalt ersetzt wird ===
+                const existingSortable = Sortable.get(container);
+                if (existingSortable) {
+                    existingSortable.destroy();
+                }
+                // ===================================================================================
+                
                 container.innerHTML = '';
                 tourStops.forEach((s, i) => {
                     const row = document.createElement('div');
@@ -568,23 +575,24 @@
                     container.appendChild(row);
                 });
                 
-                // === WICHTIG: Optimierte Sortable Config für Mobile ===
+                // === Sortable Instanz NEU initialisieren ===
                 new Sortable(container, {
                     handle: '.drag-handle',
                     animation: 250,
-                    delay: 150, // WICHTIG: 150ms gedrückt halten (verhindert versehentliches Scrollen)
-                    delayOnTouchOnly: true, // Delay nur auf Touch-Geräten
-                    touchStartThreshold: 5, // Pixel Toleranz
+                    delay: 150, 
+                    delayOnTouchOnly: true, 
+                    touchStartThreshold: 5, 
                     fallbackTolerance: 3,
                     ghostClass: 'sortable-ghost',
                     dragClass: 'sortable-drag',
                     onStart: function(evt) {
-                        if (window.navigator.vibrate) window.navigator.vibrate(50); // Kleines Feedback
+                        if (window.navigator.vibrate) window.navigator.vibrate(50);
                     },
                     onEnd: (evt) => {
                         const item = tourStops.splice(evt.oldIndex, 1)[0];
                         tourStops.splice(evt.newIndex, 0, item);
                         
+                        // Recalculate and re-render the list after successful drag
                         calculateTimes(); 
                         
                         if(activeTabId === id) {
@@ -658,7 +666,7 @@
                     lastRoutePoints = allPoints;
                     drawRouteOnMap(allPoints, tourStops);
 
-                    calculateTimes(); // Speichert nach Optimierung
+                    calculateTimes(); 
                     updateStatus("Route optimiert!", 'success');
                     
                     if(window.innerWidth < 768) {
