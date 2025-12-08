@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TomTom Tourenplanung Mobile</title>
+    <title>TB-Tourenplanung-Mobil</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script> 
@@ -17,17 +17,16 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
         
-        /* Mobile Optimierungen für Inputs (verhindert iOS Zoom) */
         input, select, textarea { font-size: 16px !important; }
 
         .calculator-scroll-area { 
             overflow-y: auto; 
             height: 100%; 
-            padding-bottom: 5rem; /* Mehr Platz unten für den FAB Button */
+            padding-bottom: 5rem; 
             max-width: 100%; 
             margin: 0 auto; 
             background-color: white; 
-            -webkit-overflow-scrolling: touch; /* Smooth scrolling auf iOS */
+            -webkit-overflow-scrolling: touch; 
         }
         
         #map-display { width: 100%; height: 100%; z-index: 1; } 
@@ -41,9 +40,8 @@
         .tab-btn.active { background-color: white; border-top: 3px solid #1e40af; border-bottom-color: transparent; color: #1e40af; font-weight: 700; }
         .tab-btn:not(.active) { background-color: #e5e7eb; color: #6b7280; border-bottom: 1px solid #d1d5db; }
         
-        .drag-handle { cursor: grab; padding: 0.8rem; touch-action: none; } /* Größere Touch-Area */
+        .drag-handle { cursor: grab; padding: 0.8rem; touch-action: none; }
         
-        /* Transition für Mobile View Switch */
         .mobile-view-transition { transition: transform 0.3s ease-in-out; }
     </style>
 </head>
@@ -53,7 +51,8 @@
         <div class="w-full mx-auto px-4 py-3"> 
             <div class="flex justify-between items-center">
                 <div class="flex items-center gap-2 overflow-hidden">
-                    <h1 class="text-lg md:text-2xl font-extrabold text-gray-700 truncate">Tourenplanung</h1>
+                    <h1 class="text-lg md:text-2xl font-extrabold text-gray-700 truncate">TB-Tourenplanung-Mobil</h1>
+                    <span class="text-[10px] bg-green-100 text-green-800 px-2 py-0.5 rounded-full border border-green-200 hidden md:inline-block" id="save-indicator">Gespeichert</span>
                 </div>
                 <button onclick="addNewTab()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow flex items-center text-sm transition active:scale-95 whitespace-nowrap">
                     <i class="fas fa-plus mr-1 md:mr-2"></i> <span class="hidden md:inline">Neue Tour</span><span>Neu</span>
@@ -63,7 +62,6 @@
     </div>
 
     <div class="flex-grow relative w-full h-full overflow-hidden md:flex"> 
-        
         <div id="list-panel" class="mobile-view-transition absolute inset-0 z-20 w-full h-full bg-white md:static md:w-1/2 md:border-r md:border-gray-300 md:transform-none flex flex-col">
             <div class="bg-gray-100 border-b border-gray-300 px-2 pt-2 flex-none">
                 <div id="tabs-header" class="flex space-x-1 overflow-x-auto pb-0.5 no-scrollbar touch-pan-x"></div>
@@ -78,7 +76,6 @@
         <button id="mobileToggleBtn" onclick="toggleMobileView()" class="md:hidden fixed bottom-6 right-6 z-50 bg-blue-700 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center transition hover:bg-blue-800 active:scale-90 border-2 border-white">
             <i class="fas fa-map-marked-alt text-xl"></i>
         </button>
-
     </div>
 
     <datalist id="addressSuggestions"></datalist>
@@ -91,6 +88,8 @@
         const BUFFER_MINUTES = 10;
         const INITIAL_START_TIME = "08:15";
         const DEFAULT_START_ADDRESS = "Michaelstein 18, 38889 Blankenburg"; 
+        const STORAGE_KEY_DATA = "tomtom_planner_data_v2";
+        const STORAGE_KEY_TAB_COUNT = "tomtom_planner_tab_count_v2";
 
         // Globale Variablen
         let currentMap = null;
@@ -99,9 +98,71 @@
         let instanceData = []; 
         let tabCounter = 0;
         let activeTabId = null;
-        
-        // Mobile View State (true = Liste sichtbar, false = Karte sichtbar)
         let isListView = true;
+
+        // ====================================================================
+        // PERSISTENZ (SPEICHERN & LADEN)
+        // ====================================================================
+
+        function saveAllData() {
+            // Wir sammeln die Daten aus allen aktiven Instanzen
+            const dataToSave = instanceData.map(inst => {
+                // Titel direkt aus dem DOM holen, da er dort editiert wird
+                const titleEl = document.querySelector(`#tab-btn-${inst.id} .tab-title`);
+                const timeEl = document.querySelector(`#tab-content-${inst.id} .startTime`);
+                
+                return {
+                    id: inst.id,
+                    title: titleEl ? titleEl.innerText : `Tour ${inst.id}`,
+                    startTime: timeEl ? timeEl.value : INITIAL_START_TIME,
+                    stops: inst.tourStops, // Das interne Array der Instanz
+                    routePoints: inst.lastRoutePoints
+                };
+            });
+
+            localStorage.setItem(STORAGE_KEY_DATA, JSON.stringify(dataToSave));
+            localStorage.setItem(STORAGE_KEY_TAB_COUNT, tabCounter.toString());
+            
+            // Kleiner visueller Indikator (optional)
+            const indicator = document.getElementById('save-indicator');
+            if(indicator) {
+                indicator.classList.remove('opacity-0');
+                setTimeout(() => indicator.classList.add('opacity-0'), 1000);
+            }
+        }
+
+        function loadAllData() {
+            const savedJson = localStorage.getItem(STORAGE_KEY_DATA);
+            const savedCount = localStorage.getItem(STORAGE_KEY_TAB_COUNT);
+
+            if (savedJson && savedCount) {
+                try {
+                    const savedData = JSON.parse(savedJson);
+                    tabCounter = parseInt(savedCount);
+                    
+                    if (savedData.length === 0) {
+                        addNewTab(); // Fallback wenn Array leer
+                        return;
+                    }
+
+                    // Tabs wiederherstellen
+                    savedData.forEach((data, index) => {
+                        addNewTab(data); // Übergebe die gespeicherten Daten
+                    });
+                    
+                    // Den ersten Tab aktivieren
+                    if (savedData.length > 0) {
+                        switchTab(savedData[0].id);
+                    }
+                } catch (e) {
+                    console.error("Fehler beim Laden:", e);
+                    localStorage.removeItem(STORAGE_KEY_DATA);
+                    addNewTab();
+                }
+            } else {
+                addNewTab(); // Ganz frisch starten
+            }
+        }
 
         // ====================================================================
         // MOBILE LOGIK
@@ -111,17 +172,13 @@
             const btn = document.getElementById('mobileToggleBtn');
             
             if (isListView) {
-                // Zur Karte wechseln
                 listPanel.style.transform = "translateX(-100%)";
-                btn.innerHTML = '<i class="fas fa-list-ul text-xl"></i>'; // Icon zu Liste ändern
+                btn.innerHTML = '<i class="fas fa-list-ul text-xl"></i>';
                 isListView = false;
-                
-                // Map resize triggern, da sie vorher evtl. versteckt war
                 setTimeout(() => { if(currentMap) currentMap.invalidateSize(); }, 350);
             } else {
-                // Zur Liste wechseln
                 listPanel.style.transform = "translateX(0)";
-                btn.innerHTML = '<i class="fas fa-map-marked-alt text-xl"></i>'; // Icon zu Karte ändern
+                btn.innerHTML = '<i class="fas fa-map-marked-alt text-xl"></i>';
                 isListView = true;
             }
         }
@@ -133,10 +190,7 @@
         function initMap() {
             if (!document.getElementById('map-display')) return;
             currentMap = L.map('map-display', { zoomControl: false }).setView([51.833, 10.790], 12);
-            
-            // Zoom Control oben rechts für bessere Erreichbarkeit auf Mobile
             L.control.zoom({ position: 'topright' }).addTo(currentMap);
-
             L.tileLayer(`https://api.tomtom.com/map/1/tile/basic/main/{z}/{x}/{y}.png?key=${TOMTOM_API_KEY}`, {
                 attribution: '© TomTom',
                 maxZoom: 19
@@ -152,24 +206,19 @@
 
             if (routePoints && routePoints.length > 0) {
                 routeLayer = L.polyline(routePoints, { color: '#2563eb', weight: 6, opacity: 0.8 }).addTo(currentMap);
-                // Padding erhöht für Mobile, damit Marker nicht unter UI Elementen verschwinden
                 currentMap.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
             }
 
             stops.forEach((stop, index) => {
                 if (stop.lat && stop.lon) {
                     const iconHtml = `<div style="background-color: ${index === 0 ? '#10b981' : '#3b82f6'}; color: white; border-radius: 50%; width: 28px; height: 28px; display:flex; align-items:center; justify-content:center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3); font-size:14px;">${index + 1}</div>`;
-                    
                     const popupContent = `<div class="text-sm"><b>${index+1}. ${stop.address}</b><br><span class="text-gray-600">Ankunft:</span> ${stop.arrStr}<br><span class="text-gray-600">Abfahrt:</span> ${stop.depStr}</div>`;
-
                     const marker = L.marker([stop.lat, stop.lon], {
                         icon: L.divIcon({ className: 'custom-div-icon', html: iconHtml, iconSize: [28, 28], iconAnchor: [14, 14] })
                     }).addTo(currentMap).bindPopup(popupContent);
-                    
                     markerLayers.push(marker);
                 }
             });
-            
             setTimeout(() => { currentMap.invalidateSize(); }, 200);
         }
 
@@ -179,7 +228,7 @@
         const ADDRESS_STORAGE_KEY = "tomtomSavedAddresses";
         let savedAddresses = [];
 
-        function loadAddresses() {
+        function loadAddressHistory() {
             try {
                 const json = localStorage.getItem(ADDRESS_STORAGE_KEY);
                 savedAddresses = json ? JSON.parse(json) : [];
@@ -187,7 +236,7 @@
             } catch (e) { console.error(e); }
         }
 
-        function saveAddress(address) {
+        function saveAddressToHistory(address) {
             if (!address || address.trim() === "") return;
             const trimmed = address.trim();
             savedAddresses = savedAddresses.filter(a => a !== trimmed);
@@ -208,7 +257,7 @@
             return `${h}:${String(m).padStart(2, '0')}`;
         }
 
-        loadAddresses();
+        loadAddressHistory();
 
         // ====================================================================
         // APP LOGIK
@@ -277,14 +326,19 @@
             </div>
         `;
 
-        function addNewTab() {
-            tabCounter++;
-            const currentId = tabCounter;
+        // Modifiziert: Akzeptiert optional initialData
+        function addNewTab(initialData = null) {
+            // Falls keine initialData, inkrementieren wir den Counter
+            if (!initialData) {
+                tabCounter++;
+            }
+            
+            const currentId = initialData ? initialData.id : tabCounter;
             
             const tabBtn = document.createElement('div');
             tabBtn.className = `tab-btn cursor-pointer px-4 py-3 md:py-2 rounded-t-lg border border-b-0 border-gray-300 flex items-center justify-between gap-2 select-none text-sm min-w-[100px]`;
             tabBtn.id = `tab-btn-${currentId}`;
-            tabBtn.innerHTML = `<span class="tab-title truncate max-w-[80px]">Tour ${currentId}</span><button onclick="closeTab(${currentId}, event)" class="text-gray-400 hover:text-red-500 w-6 h-6 flex items-center justify-center rounded-full hover:bg-red-50">✕</button>`;
+            tabBtn.innerHTML = `<span class="tab-title truncate max-w-[80px]">${initialData ? initialData.title : 'Tour ' + currentId}</span><button onclick="closeTab(${currentId}, event)" class="text-gray-400 hover:text-red-500 w-6 h-6 flex items-center justify-center rounded-full hover:bg-red-50">✕</button>`;
             tabBtn.onclick = (e) => { if(!e.target.closest('button')) switchTab(currentId); };
             
             const contentDiv = document.createElement('div');
@@ -292,19 +346,25 @@
             contentDiv.className = 'hidden h-full w-full absolute inset-0'; 
             contentDiv.innerHTML = calculatorTemplate;
 
+            // Tour Titel Änderung speichern
+            contentDiv.querySelector('.tour-title').textContent = initialData ? initialData.title : ('Tour ' + currentId);
             contentDiv.querySelector('.tour-title').addEventListener('input', function() {
                 tabBtn.querySelector('.tab-title').textContent = this.textContent.trim() || '...';
+                saveAllData(); // Speichern bei Titeländerung
             });
 
             document.getElementById('tabs-header').appendChild(tabBtn);
             document.getElementById('tabs-content').appendChild(contentDiv);
             
-            // Scroll Tabs to right
             const tabHeader = document.getElementById('tabs-header');
             setTimeout(() => tabHeader.scrollLeft = tabHeader.scrollWidth, 50);
 
-            const instance = initCalculatorInstance(contentDiv, currentId);
+            const instance = initCalculatorInstance(contentDiv, currentId, initialData);
             instanceData.push(instance);
+            
+            // Wenn es eine neue (leere) Tour ist, gleich speichern
+            if(!initialData) saveAllData();
+
             switchTab(currentId);
         }
 
@@ -341,6 +401,9 @@
             document.getElementById(`tab-content-${id}`).remove();
             
             const tabs = document.querySelectorAll('.tab-btn');
+            
+            saveAllData(); // Speichern nach Löschen
+
             if(tabs.length > 0) {
                 const lastId = parseInt(tabs[tabs.length-1].id.replace('tab-btn-',''));
                 switchTab(lastId);
@@ -352,21 +415,25 @@
         // ====================================================================
         // CALCULATOR INSTANZ
         // ====================================================================
-        function initCalculatorInstance(root, id) {
-            let tourStops = [
+        function initCalculatorInstance(root, id, initialData = null) {
+            
+            // Lade Daten oder setze Default
+            let tourStops = initialData ? initialData.stops : [
                 {address: DEFAULT_START_ADDRESS, drive:0, dist:0, arrMins:0, depMins:0, arrStr:'---', depStr:'---', lat:null, lon:null}, 
                 {address:'', drive:0, dist:0, arrMins:0, depMins:0, arrStr:'---', depStr:'---', lat:null, lon:null},
                 {address:'', drive:0, dist:0, arrMins:0, depMins:0, arrStr:'---', depStr:'---', lat:null, lon:null},
                 {address:'', drive:0, dist:0, arrMins:0, depMins:0, arrStr:'---', depStr:'---', lat:null, lon:null}
             ];
             
-            let lastRoutePoints = null;
+            let lastRoutePoints = initialData ? initialData.routePoints : null;
+            const startVal = initialData ? initialData.startTime : INITIAL_START_TIME;
 
             const container = root.querySelector('.stopsContainer');
             const timeSelect = root.querySelector('.startTime');
             const statusMsg = root.querySelector('#status-message');
             const optBtn = root.querySelector('.optimizeButton');
 
+            // Button Listener
             root.querySelector('.addStopButton').onclick = () => {
                 tourStops.push({address:'', drive:0, dist:0, arrMins:0, depMins:0, arrStr:'---', depStr:'---', lat:null, lon:null});
                 calculateTimes();
@@ -376,22 +443,29 @@
                     scrollArea.scrollTo({ top: scrollArea.scrollHeight, behavior: 'smooth' });
                 }, 50);
             };
+
             root.querySelector('.resetButton').onclick = () => {
-                if(!confirm("Alles zurücksetzen?")) return;
+                if(!confirm("Tour wirklich zurücksetzen?")) return;
                 tourStops = [
                     {address: DEFAULT_START_ADDRESS, drive:0, dist:0, arrMins:0, depMins:0, lat:null, lon:null}, 
                     {address:'', drive:0, dist:0, arrMins:0, depMins:0, lat:null, lon:null}
                 ];
                 lastRoutePoints = null;
-                calculateTimes();
+                calculateTimes(); // Speichert auch automatisch
+                if(currentMap && activeTabId === id) {
+                     if(routeLayer) currentMap.removeLayer(routeLayer);
+                     markerLayers.forEach(m => currentMap.removeLayer(m));
+                }
             };
+            
             optBtn.onclick = optimizeRoute;
             timeSelect.onchange = calculateTimes;
 
+            // Zeitoptionen füllen
             for(let h=0;h<24;h++) for(let m=0;m<60;m+=15) {
                 const t=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
                 const op=document.createElement('option'); op.value=t; op.textContent=t;
-                if(t===INITIAL_START_TIME) op.selected=true;
+                if(t===startVal) op.selected=true;
                 timeSelect.appendChild(op);
             }
             
@@ -444,6 +518,9 @@
 
                 root.querySelector('.totalDrivingTime').textContent = `${totalDriveStr} h / ${totalDist.toFixed(1)} km`;
                 root.querySelector('.totalTourDuration').textContent = `${totalDurStr} h`;
+
+                // WICHTIG: Nach jeder Berechnung speichern!
+                saveAllData();
             }
 
             function render() {
@@ -462,7 +539,6 @@
                         }
                     }
 
-                    // Mobile-friendly Row Layout
                     row.innerHTML = `
                         <div class="drag-handle text-gray-400 cursor-grab active:text-blue-600 px-2 py-2 flex items-center justify-center"><i class="fas fa-bars"></i></div>
                         <div class="font-bold text-blue-600 w-8 text-center text-sm">${i+1}.</div>
@@ -483,7 +559,11 @@
                         </button>
                     `;
                     
-                    row.querySelector('.inp-addr').onchange = (e) => { s.address = e.target.value; s.lat=null; };
+                    row.querySelector('.inp-addr').onchange = (e) => { 
+                        s.address = e.target.value; 
+                        s.lat=null; 
+                        calculateTimes(); // Speichert bei Eingabe
+                    };
                     row.querySelector('.btn-del').onclick = () => { 
                         if(tourStops.length > 1) { tourStops.splice(i, 1); calculateTimes(); }
                     };
@@ -493,13 +573,13 @@
                 new Sortable(container, {
                     handle: '.drag-handle',
                     animation: 200,
-                    delay: 100, // Hilft bei Touch devices, damit Scrollen nicht sofort drag triggert
+                    delay: 100, 
                     delayOnTouchOnly: true,
                     onEnd: (evt) => {
                         const item = tourStops.splice(evt.oldIndex, 1)[0];
                         tourStops.splice(evt.newIndex, 0, item);
                         
-                        calculateTimes(); 
+                        calculateTimes(); // Speichert nach Drag&Drop
                         
                         if(activeTabId === id) {
                             drawRouteOnMap(lastRoutePoints, tourStops);
@@ -559,10 +639,10 @@
                             const legSummary = route.legs[i].summary;
                             tourStops[i+1].drive = Math.ceil(legSummary.travelTimeInSeconds/60);
                             tourStops[i+1].dist = (legSummary.lengthInMeters / 1000).toFixed(1);
-                            saveAddress(tourStops[i+1].address);
+                            saveAddressToHistory(tourStops[i+1].address);
                         }
                     }
-                    saveAddress(tourStops[0].address);
+                    saveAddressToHistory(tourStops[0].address);
 
                     const allPoints = [];
                     route.legs.forEach(leg => {
@@ -572,10 +652,9 @@
                     lastRoutePoints = allPoints;
                     drawRouteOnMap(allPoints, tourStops);
 
-                    calculateTimes();
+                    calculateTimes(); // Speichert nach Optimierung
                     updateStatus("Route optimiert!", 'success');
                     
-                    // Automatisch zur Karte wechseln auf Mobile
                     if(window.innerWidth < 768) {
                         setTimeout(toggleMobileView, 1000);
                     }
@@ -589,7 +668,7 @@
                 }
             }
 
-            calculateTimes();
+            calculateTimes(); // Initiale Berechnung beim Laden
             
             return {
                 id,
@@ -599,7 +678,9 @@
         }
 
         initMap(); 
-        addNewTab();
+        
+        // Statt addNewTab() starten wir nun mit dem Laden der Daten
+        loadAllData();
     </script>
 </body>
 </html>
