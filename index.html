@@ -99,7 +99,7 @@
         const BUFFER_MINUTES = 10;
         const INITIAL_START_TIME = "08:15";
         const DEFAULT_START_ADDRESS = "Michaelstein 18, 38889 Blankenburg"; 
-        const STORAGE_KEY_DATA = "tomtom_planner_data_v4"; // Version erhöht
+        const STORAGE_KEY_DATA = "tomtom_planner_data_v4"; 
         const STORAGE_KEY_TAB_COUNT = "tomtom_planner_tab_count_v4";
 
         // Globale Variablen
@@ -441,19 +441,18 @@
                 }, 50);
             };
 
+            // === HIER IST DER WICHTIGE RESET-FIX FÜR ALLE TOUREN ===
             root.querySelector('.resetButton').onclick = () => {
-                if(!confirm("Tour wirklich zurücksetzen?")) return;
-                tourStops = [
-                    {address: DEFAULT_START_ADDRESS, drive:0, dist:0, arrMins:0, depMins:0, lat:null, lon:null}, 
-                    {address:'', drive:0, dist:0, arrMins:0, depMins:0, lat:null, lon:null}
-                ];
-                lastRoutePoints = null;
-                calculateTimes(); 
-                if(currentMap && activeTabId === id) {
-                     if(routeLayer) currentMap.removeLayer(routeLayer);
-                     markerLayers.forEach(m => currentMap.removeLayer(m));
-                }
+                if(!confirm("ACHTUNG! Dies setzt die gesamte App zurück und löscht ALLE Touren. Wirklich fortfahren?")) return;
+                
+                // 1. Gespeicherte Touren löschen
+                localStorage.removeItem(STORAGE_KEY_DATA);
+                localStorage.removeItem(STORAGE_KEY_TAB_COUNT);
+
+                // 2. Seite neu laden, um die App im Initialzustand zu starten (nur "Tour 1")
+                window.location.reload();
             };
+            // =======================================================
             
             optBtn.onclick = optimizeRoute;
             timeSelect.onchange = calculateTimes;
@@ -521,12 +520,11 @@
             function render() {
                 updateDatalist();
                 
-                // === WICHTIGER FIX: Sortable Instanz zerstören, bevor der DOM-Inhalt ersetzt wird ===
+                // Sortable Instanz zerstören, bevor der DOM-Inhalt ersetzt wird
                 const existingSortable = Sortable.get(container);
                 if (existingSortable) {
                     existingSortable.destroy();
                 }
-                // ===================================================================================
                 
                 container.innerHTML = '';
                 tourStops.forEach((s, i) => {
@@ -575,7 +573,7 @@
                     container.appendChild(row);
                 });
                 
-                // === Sortable Instanz NEU initialisieren ===
+                // Sortable Instanz NEU initialisieren
                 new Sortable(container, {
                     handle: '.drag-handle',
                     animation: 250,
@@ -592,7 +590,6 @@
                         const item = tourStops.splice(evt.oldIndex, 1)[0];
                         tourStops.splice(evt.newIndex, 0, item);
                         
-                        // Recalculate and re-render the list after successful drag
                         calculateTimes(); 
                         
                         if(activeTabId === id) {
