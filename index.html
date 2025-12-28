@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TomTom Tourenplanung - Final</title>
+    <title>Tourenplanung mit Statistik</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script> 
@@ -16,11 +16,8 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
-        
-        /* Verhindert automatisches Zoomen bei Klick auf Inputs auf dem iPhone */
         input, select { font-size: 16px !important; }
 
-        /* WICHTIG: Erlaubt echtes Scrollen innerhalb des Planers auf dem Smartphone */
         .calculator-scroll-area { 
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -28,31 +25,13 @@
             -webkit-overflow-scrolling: touch; 
             display: block;
         }
-
-        /* Puffer unten, damit Buttons nicht vom mobilen Toggle-Button verdeckt werden */
-        .action-area {
-            padding-bottom: 250px; 
-        }
-        
+        .action-area { padding-bottom: 250px; }
         #map-display { width: 100%; height: 100%; z-index: 1; } 
-
         .tab-btn.active { background-color: white; border-top: 3px solid #1e40af; color: #1e40af; font-weight: 700; }
         .tab-btn:not(.active) { background-color: #e5e7eb; color: #6b7280; }
-        
         .drag-handle { cursor: grab; padding: 12px; color: #9ca3af; touch-action: none; display: flex; align-items: center; }
-        
-        .editable-title {
-            border-bottom: 2px dashed #cbd5e1;
-            transition: all 0.2s;
-        }
-        .editable-title:focus {
-            border-bottom-color: #3b82f6;
-            outline: none;
-            background-color: #f8fafc;
-        }
-
+        .editable-title { border-bottom: 2px dashed #cbd5e1; transition: all 0.2s; }
         .mobile-view-transition { transition: transform 0.3s ease-in-out; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden bg-f3f4f6">
@@ -60,7 +39,7 @@
     <div class="bg-white border-b border-gray-300 flex-none z-30 shadow-sm">
         <div class="w-full mx-auto px-4 py-3 flex justify-between items-center">
             <h1 class="text-lg font-extrabold text-gray-700">Tourenplanung</h1>
-            <button onclick="addNewTab()" class="bg-blue-600 text-white font-bold py-1.5 px-3 rounded shadow text-sm transition active:scale-95">
+            <button onclick="addNewTab()" class="bg-blue-600 text-white font-bold py-1.5 px-3 rounded shadow text-sm">
                 <i class="fas fa-plus mr-1"></i> Neu
             </button>
         </div>
@@ -73,11 +52,9 @@
             </div>
             <div id="tabs-content" class="flex-grow relative"></div>
         </div>
-
         <div id="map-container" class="absolute inset-0 z-10 w-full h-full md:static md:w-1/2 bg-gray-200">
             <div id="map-display"></div>
         </div>
-
         <button id="mobileToggleBtn" onclick="toggleMobileView()" class="md:hidden fixed bottom-6 right-6 z-50 bg-blue-700 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center border-2 border-white">
             <i class="fas fa-map-marked-alt text-xl"></i>
         </button>
@@ -98,7 +75,6 @@
         let tabCounter = 0;
         let isListView = true;
 
-        // --- Adress-Vorschläge Logik ---
         function getSavedAddresses() {
             const data = localStorage.getItem(STORAGE_KEY);
             return data ? JSON.parse(data) : [];
@@ -106,19 +82,25 @@
 
         function saveAddressesToHistory(stops) {
             let history = getSavedAddresses();
+            let changed = false;
             stops.forEach(s => {
-                if (s.address && s.address.length > 5 && !history.includes(s.address)) {
-                    history.push(s.address);
+                const addr = s.address ? s.address.trim() : "";
+                if (addr.length > 5 && !history.includes(addr)) {
+                    history.push(addr);
+                    changed = true;
                 }
             });
-            if (history.length > 50) history = history.slice(-50);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
-            updateDatalist();
+            if (changed) {
+                if (history.length > 50) history = history.slice(-50);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+                updateDatalist();
+            }
         }
 
         function updateDatalist() {
             const history = getSavedAddresses();
-            document.getElementById('addressSuggestions').innerHTML = history.map(addr => `<option value="${addr}">`).join('');
+            const dl = document.getElementById('addressSuggestions');
+            if (dl) dl.innerHTML = history.map(addr => `<option value="${addr}">`).join('');
         }
 
         function toggleMobileView() {
@@ -145,26 +127,24 @@
 
         const calculatorTemplate = `
             <div class="calculator-scroll-area px-4 pt-4">
-                <div class="mb-4">
-                    <h2 class="text-xl font-bold text-blue-900 editable-title px-1 py-1 inline-block min-w-[100px]" contenteditable="true">Tour Name</h2>
-                    <p class="text-[10px] text-gray-400">Klicken zum Umbenennen</p>
-                </div>
-
+                <div class="mb-4"><h2 class="text-xl font-bold text-blue-900 editable-title px-1 py-1 inline-block min-w-[100px]" contenteditable="true">Tour Name</h2></div>
                 <div class="mb-4 p-4 bg-blue-50 rounded-xl border border-blue-200 shadow-sm">
                     <label class="block text-xs font-bold text-blue-800 uppercase mb-1">⏱️ Startzeit</label>
                     <select class="startTime w-full p-2 border border-blue-300 rounded-lg font-mono mb-2"></select>
                 </div>
-                
                 <div class="stopsContainer space-y-2"></div>
                 
+                <div class="statsBox hidden mt-6 p-4 bg-white border border-gray-200 rounded-xl shadow-sm space-y-2">
+                    <div class="flex justify-between text-sm text-gray-600"><span>Gesamtdauer (m. Puffer):</span> <span class="font-bold text-blue-900" id="totalDuration">--</span></div>
+                    <div class="flex justify-between text-sm text-gray-600"><span>Reine Fahrzeit:</span> <span class="font-bold text-gray-800" id="pureDriveTime">--</span></div>
+                    <div class="flex justify-between text-sm text-gray-600"><span>Gesamtstrecke:</span> <span class="font-bold text-gray-800" id="totalDistance">--</span></div>
+                </div>
+
                 <div class="action-area mt-6 flex flex-col gap-3">
-                    <button class="addBtn w-full py-3 bg-green-600 text-white font-bold rounded-lg shadow active:scale-95"><i class="fas fa-plus mr-2"></i>Stopp dazu</button>
-                    <button class="updateBtn w-full py-3 bg-blue-600 text-white font-bold rounded-lg shadow active:scale-95"><i class="fas fa-route mr-2"></i>Anzeigen & Berechnen</button>
-                    
+                    <button class="addBtn w-full py-3 bg-green-600 text-white font-bold rounded-lg shadow"><i class="fas fa-plus mr-2"></i>Stopp dazu</button>
+                    <button class="updateBtn w-full py-3 bg-blue-600 text-white font-bold rounded-lg shadow"><i class="fas fa-route mr-2"></i>Anzeigen & Berechnen</button>
                     <div class="border-t border-gray-200 mt-4 pt-4">
-                        <button class="resetBtn w-full py-3 bg-red-100 text-red-700 font-bold rounded-lg border border-red-200 active:bg-red-200">
-                            <i class="fas fa-trash-alt mr-2"></i> Tour zurücksetzen (Reset)
-                        </button>
+                        <button class="resetBtn w-full py-3 bg-red-100 text-red-700 font-bold rounded-lg border border-red-200"><i class="fas fa-trash-alt mr-2"></i> Tour zurücksetzen</button>
                     </div>
                 </div>
             </div>
@@ -177,7 +157,6 @@
             tabBtn.id = `tab-btn-${id}`;
             tabBtn.className = `tab-btn cursor-pointer px-4 py-2 rounded-t-lg border border-gray-300 text-sm flex items-center shrink-0`;
             tabBtn.innerHTML = `<span class="tab-label mr-2">Tour ${id}</span><span class="px-1 hover:text-red-500 font-bold" onclick="this.parentElement.remove()">✕</span>`;
-            
             tabBtn.onclick = (e) => { if(e.target.tagName !== 'SPAN' || !e.target.innerText.includes('✕')) switchTab(id); };
             
             const contentDiv = document.createElement('div');
@@ -187,10 +166,7 @@
 
             const titleElem = contentDiv.querySelector('.editable-title');
             titleElem.innerText = `Tour ${id}`;
-            titleElem.oninput = () => {
-                const newTitle = titleElem.innerText.trim() || `Tour ${id}`;
-                tabBtn.querySelector('.tab-label').innerText = newTitle;
-            };
+            titleElem.oninput = () => { tabBtn.querySelector('.tab-label').innerText = titleElem.innerText.trim() || `Tour ${id}`; };
 
             document.getElementById('tabs-header').appendChild(tabBtn);
             document.getElementById('tabs-content').appendChild(contentDiv);
@@ -215,16 +191,12 @@
                 timeSelect.innerHTML += `<option value="${t}" ${t===INITIAL_START_TIME?'selected':''}>${t}</option>`;
             }
 
-            // Drag and Drop Initialisierung
             new Sortable(container, {
                 handle: '.drag-handle',
                 animation: 200,
                 onEnd: () => {
-                    const newStops = [];
-                    container.querySelectorAll('.stop-row').forEach(row => {
-                        const idx = row.dataset.id;
-                        newStops.push(tourStops[idx]);
-                    });
+                    const rows = Array.from(container.querySelectorAll('.stop-row'));
+                    const newStops = rows.map(row => tourStops[parseInt(row.dataset.id)]);
                     tourStops = newStops;
                     render();
                 }
@@ -239,23 +211,26 @@
                     row.innerHTML = `
                         <div class="drag-handle"><i class="fas fa-bars"></i></div>
                         <div class="font-bold text-blue-600 w-5 text-sm">${i+1}.</div>
-                        <input class="flex-grow p-2 border rounded text-sm min-w-0" value="${s.address || ''}" list="addressSuggestions" placeholder="Adresse eingeben...">
+                        <input class="flex-grow p-2 border rounded text-sm min-w-0" value="${s.address || ''}" list="addressSuggestions" placeholder="Adresse...">
                         <div class="text-[11px] font-bold text-blue-800 w-10 text-center">${s.arrStr || '--:--'}</div>
-                        <button class="text-gray-300 px-2 hover:text-red-500" onclick="this.parentElement.remove()">✕</button>
+                        <button class="text-gray-300 px-2" onclick="removeStop(${i})">✕</button>
                     `;
-                    row.querySelector('input').onchange = (e) => { s.address = e.target.value; };
+                    row.querySelector('input').addEventListener('input', (e) => { s.address = e.target.value; });
                     container.appendChild(row);
                 });
             }
 
+            window.removeStop = (index) => {
+                if(tourStops.length > 1) {
+                    tourStops.splice(index, 1);
+                    render();
+                }
+            };
+
             async function updateRoute() {
-                const inputs = container.querySelectorAll('input');
-                inputs.forEach((inp, idx) => { if(tourStops[idx]) tourStops[idx].address = inp.value; });
-                
                 saveAddressesToHistory(tourStops);
-                const valid = tourStops.filter(s => s.address.length > 3);
-                
-                if (valid.length < 2) { alert("Bitte mindestens zwei Adressen eingeben."); return; }
+                const valid = tourStops.filter(s => s.address.trim().length > 3);
+                if (valid.length < 2) return;
 
                 try {
                     const coords = [];
@@ -272,23 +247,43 @@
                     const data = await res.json();
                     
                     const route = data.routes[0];
-                    route.legs.forEach((leg, i) => {
-                        if(tourStops[i+1]) tourStops[i+1].drive = Math.ceil(leg.summary.travelTimeInSeconds/60);
+                    let totalSeconds = 0;
+                    let totalMeters = 0;
+                    let currentIdx = 0;
+
+                    tourStops.forEach((s) => {
+                        if(s.address.trim().length > 3) {
+                            if(currentIdx > 0) {
+                                const leg = route.legs[currentIdx-1];
+                                s.drive = Math.ceil(leg.summary.travelTimeInSeconds/60);
+                                totalSeconds += leg.summary.travelTimeInSeconds;
+                                totalMeters += leg.summary.lengthInMeters;
+                            }
+                            currentIdx++;
+                        }
                     });
 
-                    // Zeitberechnung
+                    // Zeitberechnung mit Puffer
                     const startMins = parseInt(timeSelect.value.split(':')[0])*60 + parseInt(timeSelect.value.split(':')[1]);
                     let currentMins = startMins;
                     tourStops.forEach((s, i) => {
-                        if(i > 0) {
-                            currentMins += (s.drive || 0);
-                            currentMins = Math.ceil(currentMins/5)*5;
-                            s.arrStr = `${Math.floor(currentMins/60)%24}:${String(currentMins%60).padStart(2,'0')}`;
-                            currentMins += BUFFER_MINUTES;
-                        } else { s.arrStr = 'Start'; }
+                        if(s.address.trim().length > 3) {
+                            if(i > 0) {
+                                currentMins += (s.drive || 0);
+                                currentMins = Math.ceil(currentMins/5)*5;
+                                s.arrStr = `${Math.floor(currentMins/60)%24}:${String(currentMins%60).padStart(2,'0')}`;
+                                currentMins += BUFFER_MINUTES;
+                            } else { s.arrStr = 'Start'; }
+                        } else { s.arrStr = '--:--'; }
                     });
 
-                    // Karte aktualisieren
+                    // Statistik-Update
+                    const totalDurationMins = currentMins - BUFFER_MINUTES - startMins;
+                    root.querySelector('#totalDuration').innerText = `${Math.floor(totalDurationMins/60)}h ${totalDurationMins%60}min`;
+                    root.querySelector('#pureDriveTime').innerText = `${Math.floor(totalSeconds/3600)}h ${Math.floor((totalSeconds%3600)/60)}min`;
+                    root.querySelector('#totalDistance').innerText = `${(totalMeters/1000).toFixed(1)} km`;
+                    root.querySelector('.statsBox').classList.remove('hidden');
+
                     if (routeLayer) currentMap.removeLayer(routeLayer);
                     markerLayers.forEach(m => currentMap.removeLayer(m));
                     markerLayers = [];
@@ -298,7 +293,7 @@
                     routeLayer = L.polyline(points, {color: 'blue', weight: 5}).addTo(currentMap);
                     
                     tourStops.forEach((s, i) => {
-                        if(s.lat) {
+                        if(s.lat && s.address.trim().length > 3) {
                             const m = L.marker([s.lat, s.lon]).addTo(currentMap).bindPopup(`${i+1}. ${s.address}`);
                             markerLayers.push(m);
                         }
@@ -306,14 +301,15 @@
 
                     currentMap.fitBounds(routeLayer.getBounds(), {padding: [30, 30]});
                     render();
-                } catch(e) { alert("Fehler bei der Routenberechnung!"); }
+                } catch(e) { console.log(e); }
             }
 
             root.querySelector('.addBtn').onclick = () => { tourStops.push({address:'', drive:0}); render(); };
             root.querySelector('.updateBtn').onclick = updateRoute;
             root.querySelector('.resetBtn').onclick = () => { 
-                if(confirm('Möchtest du diese Tour wirklich zurücksetzen?')) { 
+                if(confirm('Tour zurücksetzen?')) { 
                     tourStops = [{address: DEFAULT_START_ADDRESS, drive:0}, {address:'', drive:0}, {address:'', drive:0}]; 
+                    root.querySelector('.statsBox').classList.add('hidden');
                     render(); 
                 }
             };
