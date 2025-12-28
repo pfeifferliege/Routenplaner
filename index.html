@@ -2,8 +2,8 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TomTom Tourenplanung (Mobile Fix)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TomTom Tourenplanung</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script> 
@@ -11,82 +11,68 @@
     <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
     
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
         
-        input, select, textarea { font-size: 16px !important; }
-
         .calculator-scroll-area { 
             overflow-y: auto; 
             height: 100%; 
-            padding-bottom: 6rem; 
-            max-width: 100%; 
+            padding-bottom: 2rem; 
+            max-width: 900px; 
             margin: 0 auto; 
             background-color: white; 
-            -webkit-overflow-scrolling: touch; 
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); 
         }
         
+        /* Map Container Style */
         #map-display { width: 100%; height: 100%; z-index: 1; } 
         
+        /* Custom Marker Style */
         .custom-div-icon { 
             background-color: transparent;
             border: none;
             text-align: center;
         }
 
+        .calculator-scroll-area::-webkit-scrollbar { width: 8px; }
+        .calculator-scroll-area::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
+        
         .tab-btn.active { background-color: white; border-top: 3px solid #1e40af; border-bottom-color: transparent; color: #1e40af; font-weight: 700; }
         .tab-btn:not(.active) { background-color: #e5e7eb; color: #6b7280; border-bottom: 1px solid #d1d5db; }
         
-        /* WICHTIG für Mobile Drag & Drop */
-        .drag-handle { 
-            cursor: grab; 
-            padding: 1rem; 
-            touch-action: none; 
-            color: #9ca3af;
-        }
-        .drag-handle:active { cursor: grabbing; color: #2563eb; }
-        
-        /* Styling während des Ziehens */
-        .sortable-ghost { opacity: 0.4; background-color: #eff6ff; border: 2px dashed #3b82f6; }
-        .sortable-drag { background-color: #ffffff; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); transform: scale(1.02); }
-
-        .mobile-view-transition { transition: transform 0.3s ease-in-out; }
+        .drag-handle { cursor: grab; padding: 0.5rem; }
+        .ghost { opacity: 0.5; background: #fefcbf; }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden bg-f3f4f6">
 
-    <div class="bg-white border-b border-gray-300 flex-none z-30 shadow-sm sticky top-0">
-        <div class="w-full mx-auto px-4 py-3"> 
-            <div class="flex justify-between items-center">
-                <div class="flex items-center gap-2 overflow-hidden">
-                    <h1 class="text-lg md:text-2xl font-extrabold text-gray-700 truncate">Tourenplanung</h1>
-                    <span class="text-[10px] bg-green-100 text-green-800 px-2 py-0.5 rounded-full border border-green-200 hidden md:inline-block transition-opacity duration-500 opacity-0" id="save-indicator">Gespeichert</span>
+    <div class="bg-white border-b border-gray-300 flex-none z-20 shadow-sm sticky top-0">
+        <div class="w-full mx-auto px-4 pt-4 pb-2"> 
+            <div class="flex justify-between items-end">
+                <div class="flex items-center gap-4">
+                    <h1 class="text-xl md:text-2xl font-extrabold text-gray-700">Tourenplanung</h1>
+                    <span class="text-xs text-gray-400 hidden md:inline-block">| TomTom API Integration</span>
                 </div>
-                <button onclick="addNewTab()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow flex items-center text-sm transition active:scale-95 whitespace-nowrap">
-                    <i class="fas fa-plus mr-1 md:mr-2"></i> <span class="hidden md:inline">Neue Tour</span><span>Neu</span>
+                <button onclick="addNewTab()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1.5 px-3 rounded shadow flex items-center text-sm transition hover:scale-105">
+                    Neue Tour
                 </button>
             </div>
         </div>
     </div>
 
-    <div class="flex-grow relative w-full h-full overflow-hidden md:flex"> 
-        <div id="list-panel" class="mobile-view-transition absolute inset-0 z-20 w-full h-full bg-white md:static md:w-1/2 md:border-r md:border-gray-300 md:transform-none flex flex-col">
-            <div class="bg-gray-100 border-b border-gray-300 px-2 pt-2 flex-none">
-                <div id="tabs-header" class="flex space-x-1 overflow-x-auto pb-0.5 no-scrollbar touch-pan-x"></div>
+    <div class="flex-grow flex h-full overflow-hidden w-full"> 
+        
+        <div class="flex flex-col h-full overflow-hidden w-1/2 border-r border-gray-300">
+            <div class="bg-gray-100 border-b border-gray-300 px-4 pt-2 flex-none">
+                <div id="tabs-header" class="flex space-x-1 overflow-x-auto pb-0.5 no-scrollbar"></div>
             </div>
             <div id="tabs-content" class="flex-grow relative overflow-hidden"></div>
         </div>
 
-        <div id="map-container" class="absolute inset-0 z-10 w-full h-full md:static md:w-1/2 bg-gray-200">
+        <div id="map-container" class="w-1/2 h-full relative">
             <div id="map-display"></div>
         </div>
-
-        <button id="mobileToggleBtn" onclick="toggleMobileView()" class="md:hidden fixed bottom-6 right-6 z-50 bg-blue-700 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center transition hover:bg-blue-800 active:scale-90 border-2 border-white">
-            <i class="fas fa-map-marked-alt text-xl"></i>
-        </button>
     </div>
 
     <datalist id="addressSuggestions"></datalist>
@@ -99,8 +85,6 @@
         const BUFFER_MINUTES = 10;
         const INITIAL_START_TIME = "08:15";
         const DEFAULT_START_ADDRESS = "Michaelstein 18, 38889 Blankenburg"; 
-        const STORAGE_KEY_DATA = "tomtom_planner_data_v4"; 
-        const STORAGE_KEY_TAB_COUNT = "tomtom_planner_tab_count_v4";
 
         // Globale Variablen
         let currentMap = null;
@@ -109,86 +93,6 @@
         let instanceData = []; 
         let tabCounter = 0;
         let activeTabId = null;
-        let isListView = true;
-
-        // ====================================================================
-        // PERSISTENZ (SPEICHERN & LADEN)
-        // ====================================================================
-
-        function saveAllData() {
-            const dataToSave = instanceData.map(inst => {
-                const titleEl = document.querySelector(`#tab-btn-${inst.id} .tab-title`);
-                const timeEl = document.querySelector(`#tab-content-${inst.id} .startTime`);
-                
-                return {
-                    id: inst.id,
-                    title: titleEl ? titleEl.innerText : `Tour ${inst.id}`,
-                    startTime: timeEl ? timeEl.value : INITIAL_START_TIME,
-                    stops: inst.tourStops, 
-                    routePoints: inst.lastRoutePoints
-                };
-            });
-
-            localStorage.setItem(STORAGE_KEY_DATA, JSON.stringify(dataToSave));
-            localStorage.setItem(STORAGE_KEY_TAB_COUNT, tabCounter.toString());
-            
-            const indicator = document.getElementById('save-indicator');
-            if(indicator) {
-                indicator.classList.remove('opacity-0');
-                if(indicator.timeout) clearTimeout(indicator.timeout);
-                indicator.timeout = setTimeout(() => indicator.classList.add('opacity-0'), 1500);
-            }
-        }
-
-        function loadAllData() {
-            const savedJson = localStorage.getItem(STORAGE_KEY_DATA);
-            const savedCount = localStorage.getItem(STORAGE_KEY_TAB_COUNT);
-
-            if (savedJson && savedCount) {
-                try {
-                    const savedData = JSON.parse(savedJson);
-                    tabCounter = parseInt(savedCount);
-                    
-                    if (!Array.isArray(savedData) || savedData.length === 0) {
-                        addNewTab(); 
-                        return;
-                    }
-
-                    savedData.forEach((data) => {
-                        addNewTab(data); 
-                    });
-                    
-                    if (savedData.length > 0) {
-                        switchTab(savedData[0].id);
-                    }
-                } catch (e) {
-                    console.error("Fehler beim Laden:", e);
-                    localStorage.removeItem(STORAGE_KEY_DATA);
-                    addNewTab();
-                }
-            } else {
-                addNewTab(); 
-            }
-        }
-
-        // ====================================================================
-        // MOBILE LOGIK
-        // ====================================================================
-        function toggleMobileView() {
-            const listPanel = document.getElementById('list-panel');
-            const btn = document.getElementById('mobileToggleBtn');
-            
-            if (isListView) {
-                listPanel.style.transform = "translateX(-100%)";
-                btn.innerHTML = '<i class="fas fa-list-ul text-xl"></i>';
-                isListView = false;
-                setTimeout(() => { if(currentMap) currentMap.invalidateSize(); }, 350);
-            } else {
-                listPanel.style.transform = "translateX(0)";
-                btn.innerHTML = '<i class="fas fa-map-marked-alt text-xl"></i>';
-                isListView = true;
-            }
-        }
 
         // ====================================================================
         // KARTEN-LOGIK
@@ -196,8 +100,7 @@
 
         function initMap() {
             if (!document.getElementById('map-display')) return;
-            currentMap = L.map('map-display', { zoomControl: false }).setView([51.833, 10.790], 12);
-            L.control.zoom({ position: 'topright' }).addTo(currentMap);
+            currentMap = L.map('map-display').setView([51.833, 10.790], 12);
             L.tileLayer(`https://api.tomtom.com/map/1/tile/basic/main/{z}/{x}/{y}.png?key=${TOMTOM_API_KEY}`, {
                 attribution: '© TomTom',
                 maxZoom: 19
@@ -212,20 +115,25 @@
             markerLayers = [];
 
             if (routePoints && routePoints.length > 0) {
-                routeLayer = L.polyline(routePoints, { color: '#2563eb', weight: 6, opacity: 0.8 }).addTo(currentMap);
+                routeLayer = L.polyline(routePoints, { color: 'blue', weight: 5 }).addTo(currentMap);
                 currentMap.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
             }
 
             stops.forEach((stop, index) => {
                 if (stop.lat && stop.lon) {
-                    const iconHtml = `<div style="background-color: ${index === 0 ? '#10b981' : '#3b82f6'}; color: white; border-radius: 50%; width: 28px; height: 28px; display:flex; align-items:center; justify-content:center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3); font-size:14px;">${index + 1}</div>`;
-                    const popupContent = `<div class="text-sm"><b>${index+1}. ${stop.address}</b><br><span class="text-gray-600">Ankunft:</span> ${stop.arrStr}<br><span class="text-gray-600">Abfahrt:</span> ${stop.depStr}</div>`;
+                    const iconHtml = `<div style="background-color: ${index === 0 ? '#10b981' : '#3b82f6'}; color: white; border-radius: 50%; width: 24px; height: 24px; text-align: center; font-weight: bold; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.3);">${index + 1}</div>`;
+                    
+                    // Zeigt nun Ankunfts- und Abfahrtszeit im Popup
+                    const popupContent = `<b>${index+1}. ${stop.address}</b><br>Ankunft: ${stop.arrStr}<br>Abfahrt: ${stop.depStr}`;
+
                     const marker = L.marker([stop.lat, stop.lon], {
-                        icon: L.divIcon({ className: 'custom-div-icon', html: iconHtml, iconSize: [28, 28], iconAnchor: [14, 14] })
+                        icon: L.divIcon({ className: 'custom-div-icon', html: iconHtml, iconSize: [24, 24], iconAnchor: [12, 12] })
                     }).addTo(currentMap).bindPopup(popupContent);
+                    
                     markerLayers.push(marker);
                 }
             });
+            
             setTimeout(() => { currentMap.invalidateSize(); }, 200);
         }
 
@@ -235,7 +143,7 @@
         const ADDRESS_STORAGE_KEY = "tomtomSavedAddresses";
         let savedAddresses = [];
 
-        function loadAddressHistory() {
+        function loadAddresses() {
             try {
                 const json = localStorage.getItem(ADDRESS_STORAGE_KEY);
                 savedAddresses = json ? JSON.parse(json) : [];
@@ -243,7 +151,7 @@
             } catch (e) { console.error(e); }
         }
 
-        function saveAddressToHistory(address) {
+        function saveAddress(address) {
             if (!address || address.trim() === "") return;
             const trimmed = address.trim();
             savedAddresses = savedAddresses.filter(a => a !== trimmed);
@@ -258,42 +166,38 @@
             if (dl) dl.innerHTML = savedAddresses.map(a => `<option value="${a}"></option>`).join('');
         }
         
+        // Formatiert Minuten in H:MM (z.B. 70 -> 1:10)
         function formatTimeDuration(totalMinutes) {
             const h = Math.floor(totalMinutes / 60);
             const m = totalMinutes % 60;
             return `${h}:${String(m).padStart(2, '0')}`;
         }
 
-        loadAddressHistory();
+        loadAddresses();
 
         // ====================================================================
         // APP LOGIK
         // ====================================================================
 
         const calculatorTemplate = `
-            <div class="calculator-scroll-area px-3 py-4 md:px-4 md:py-6">
+            <div class="calculator-scroll-area px-4 py-6">
                 <div class="mb-4">
-                    <h2 class="text-xl md:text-2xl font-extrabold text-blue-800 tour-title editable-title outline-none border-b border-transparent focus:border-blue-300" contenteditable="true">Tour-Name</h2>
+                    <h2 class="text-2xl font-extrabold text-blue-800 tour-title editable-title" contenteditable="true">Tour-Name</h2>
                 </div>
                 
                 <div class="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-200 shadow-sm">                        
                     <div class="grid grid-cols-1 gap-4">                                
                         <div>
-                            <label class="block text-xs uppercase font-bold text-blue-800 mb-1 tracking-wider">⏱️ Startzeit</label>
-                            <div class="relative">
-                                <select class="startTime w-full p-3 border border-blue-300 bg-white rounded-lg text-lg font-mono shadow-sm appearance-none focus:ring-2 focus:ring-blue-500 outline-none"></select>
-                                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-blue-700">
-                                    <i class="fas fa-chevron-down text-xs"></i>
-                                </div>
-                            </div>
+                            <label class="block text-sm font-bold text-blue-800 mb-1">⏱️ Startzeit</label>
+                            <select class="startTime w-full p-2 border border-blue-400 bg-white rounded-lg text-xl font-mono shadow-inner"></select>
                         </div>
-                        <div class="pt-3 border-t border-blue-200">
-                            <div class="flex justify-between items-center text-sm mb-1">
-                                <span class="text-gray-600">Fahrzeit / Strecke:</span>
+                        <div class="pt-2 border-t border-blue-200">
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-gray-600">Reine Fahrzeit / Strecke:</span>
                                 <span class="totalDrivingTime font-extrabold text-blue-700">0:00 h / 0 km</span>
                             </div>                                                
-                            <div class="flex justify-between items-center text-sm">
-                                <span class="text-gray-600">Gesamtdauer:</span>
+                            <div class="flex justify-between items-center text-sm mt-1">
+                                <span class="text-gray-600">Gesamtdauer (inkl. Puffer):</span>
                                 <span class="totalTourDuration font-extrabold text-blue-700">0:00 h</span>
                             </div>
                         </div>
@@ -301,47 +205,37 @@
                 </div>
 
                 <div class="mb-6">
-                    <h2 class="text-lg font-bold text-gray-800 mb-2 px-1">📍 Stopps <span class="text-xs font-normal text-gray-400 ml-2">(Lang drücken zum Verschieben)</span></h2>
-                    <div id="status-message" class="hidden p-3 mb-4 text-sm rounded-lg text-yellow-800 bg-yellow-50"></div>
+                    <h2 class="text-lg font-bold text-gray-800 mb-2">📍 Stopps</h2>
+                    <div id="status-message" class="p-3 mb-4 text-sm rounded-lg text-yellow-800 bg-yellow-50">Bitte Adressen eingeben.</div>
                     
-                    <div class="flex items-center gap-2 px-2 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wide">
-                        <div class="w-10 text-center">Pos</div>
+                    <div class="flex items-center gap-2 p-2 text-xs font-bold text-gray-500 uppercase">
+                        <div class="w-6 text-center">#</div>
                         <div class="flex-grow">Adresse</div>
-                        <div class="w-16 text-center">Fahrt</div>
-                        <div class="w-12 text-center">Zeit</div> 
-                        <div class="w-8"></div>
+                        <div class="w-20 text-center text-red-600">Fahrt / Km</div>
+                        <div class="w-12 text-center text-blue-700">Ank. / Abf.</div> 
+                        <div class="w-6"></div>
                     </div>
 
-                    <div class="stopsContainer space-y-2 mt-1 pb-2"></div>
+                    <div class="stopsContainer space-y-1 mt-1"></div>
                     
-                    <div class="mt-4 flex flex-col gap-3 pt-4 border-t border-gray-100">
-                        <button class="addStopButton w-full py-3 bg-green-600 text-white font-semibold rounded-lg shadow hover:bg-green-700 transition flex justify-center items-center gap-2 active:bg-green-800">
-                             <i class="fas fa-plus-circle"></i> Stopp hinzufügen
-                        </button>
-                        
-                        <div class="grid grid-cols-2 gap-3">
-                            <button class="optimizeButton w-full py-3 bg-blue-600 text-white font-semibold rounded-lg shadow hover:bg-blue-700 transition flex justify-center items-center gap-2 active:bg-blue-800">
-                                <i class="fas fa-route"></i> Optimieren
-                            </button>
-                            <button class="resetButton w-full py-3 bg-white text-red-600 border border-red-200 font-semibold rounded-lg shadow-sm hover:bg-red-50 transition active:bg-red-100">
-                                Reset
-                            </button>
-                        </div>
+                    <div class="mt-6 flex flex-col gap-2 pt-4 border-t">
+                        <button class="addStopButton w-full px-4 py-2 bg-green-600 text-white font-semibold rounded shadow hover:bg-green-700 transition text-sm">+ Stopp</button>
+                        <button class="optimizeButton w-full px-4 py-2 bg-blue-600 text-white font-semibold rounded shadow hover:bg-blue-700 transition text-sm">Route Optimieren (TomTom)</button>
+                        <button class="resetButton w-full px-4 py-2 bg-red-100 text-red-600 font-semibold rounded shadow hover:bg-red-200 transition text-sm">Reset</button>
                     </div>                    
                 </div>
-                <p class="text-[10px] text-gray-400 text-center pb-8">*Puffer pro Stopp: ${BUFFER_MINUTES} Min</p>
+                <p class="text-[10px] text-gray-400 text-center">*Puffer: ${BUFFER_MINUTES} Min</p>
             </div>
         `;
 
-        function addNewTab(initialData = null) {
-            if (!initialData) tabCounter++;
-            
-            const currentId = initialData ? initialData.id : tabCounter;
+        function addNewTab() {
+            tabCounter++;
+            const currentId = tabCounter;
             
             const tabBtn = document.createElement('div');
-            tabBtn.className = `tab-btn cursor-pointer px-4 py-3 md:py-2 rounded-t-lg border border-b-0 border-gray-300 flex items-center justify-between gap-2 select-none text-sm min-w-[100px]`;
+            tabBtn.className = `tab-btn cursor-pointer px-3 py-2 rounded-t-lg border border-b-0 border-gray-300 flex items-center justify-between gap-2 select-none text-sm`;
             tabBtn.id = `tab-btn-${currentId}`;
-            tabBtn.innerHTML = `<span class="tab-title truncate max-w-[80px]">${initialData ? initialData.title : 'Tour ' + currentId}</span><button onclick="closeTab(${currentId}, event)" class="text-gray-400 hover:text-red-500 w-6 h-6 flex items-center justify-center rounded-full hover:bg-red-50">✕</button>`;
+            tabBtn.innerHTML = `<span class="tab-title truncate w-20">Tour ${currentId}</span><button onclick="closeTab(${currentId}, event)" class="text-gray-400 hover:text-red-500 rounded-full">✕</button>`;
             tabBtn.onclick = (e) => { if(!e.target.closest('button')) switchTab(currentId); };
             
             const contentDiv = document.createElement('div');
@@ -349,23 +243,15 @@
             contentDiv.className = 'hidden h-full w-full absolute inset-0'; 
             contentDiv.innerHTML = calculatorTemplate;
 
-            contentDiv.querySelector('.tour-title').textContent = initialData ? initialData.title : ('Tour ' + currentId);
             contentDiv.querySelector('.tour-title').addEventListener('input', function() {
                 tabBtn.querySelector('.tab-title').textContent = this.textContent.trim() || '...';
-                saveAllData(); 
             });
 
             document.getElementById('tabs-header').appendChild(tabBtn);
             document.getElementById('tabs-content').appendChild(contentDiv);
             
-            const tabHeader = document.getElementById('tabs-header');
-            setTimeout(() => tabHeader.scrollLeft = tabHeader.scrollWidth, 50);
-
-            const instance = initCalculatorInstance(contentDiv, currentId, initialData);
+            const instance = initCalculatorInstance(contentDiv, currentId);
             instanceData.push(instance);
-            
-            if(!initialData) saveAllData();
-
             switchTab(currentId);
         }
 
@@ -394,15 +280,13 @@
 
         function closeTab(id, event) {
             event.stopPropagation();
-            if(!confirm("Tour wirklich löschen?")) return;
+            if(!confirm("Löschen?")) return;
             const idx = instanceData.findIndex(i => i.id === id);
             if(idx > -1) instanceData.splice(idx, 1);
             
             document.getElementById(`tab-btn-${id}`).remove();
             document.getElementById(`tab-content-${id}`).remove();
             
-            saveAllData(); 
-
             const tabs = document.querySelectorAll('.tab-btn');
             if(tabs.length > 0) {
                 const lastId = parseInt(tabs[tabs.length-1].id.replace('tab-btn-',''));
@@ -415,17 +299,16 @@
         // ====================================================================
         // CALCULATOR INSTANZ
         // ====================================================================
-        function initCalculatorInstance(root, id, initialData = null) {
-            
-            let tourStops = initialData ? initialData.stops : [
+        function initCalculatorInstance(root, id) {
+            // *** HIER WURDE DIE ANZAHL DER STANDARD-STOPPS AUF 4 ERHÖHT ***
+            let tourStops = [
                 {address: DEFAULT_START_ADDRESS, drive:0, dist:0, arrMins:0, depMins:0, arrStr:'---', depStr:'---', lat:null, lon:null}, 
                 {address:'', drive:0, dist:0, arrMins:0, depMins:0, arrStr:'---', depStr:'---', lat:null, lon:null},
                 {address:'', drive:0, dist:0, arrMins:0, depMins:0, arrStr:'---', depStr:'---', lat:null, lon:null},
                 {address:'', drive:0, dist:0, arrMins:0, depMins:0, arrStr:'---', depStr:'---', lat:null, lon:null}
             ];
             
-            let lastRoutePoints = initialData ? initialData.routePoints : null;
-            const startVal = initialData ? initialData.startTime : INITIAL_START_TIME;
+            let lastRoutePoints = null;
 
             const container = root.querySelector('.stopsContainer');
             const timeSelect = root.querySelector('.startTime');
@@ -435,40 +318,28 @@
             root.querySelector('.addStopButton').onclick = () => {
                 tourStops.push({address:'', drive:0, dist:0, arrMins:0, depMins:0, arrStr:'---', depStr:'---', lat:null, lon:null});
                 calculateTimes();
-                setTimeout(() => {
-                    const scrollArea = root.querySelector('.calculator-scroll-area');
-                    scrollArea.scrollTo({ top: scrollArea.scrollHeight, behavior: 'smooth' });
-                }, 50);
             };
-
-            // === HIER IST DER WICHTIGE RESET-FIX FÜR ALLE TOUREN ===
             root.querySelector('.resetButton').onclick = () => {
-                if(!confirm("ACHTUNG! Dies setzt die gesamte App zurück und löscht ALLE Touren. Wirklich fortfahren?")) return;
-                
-                // 1. Gespeicherte Touren löschen
-                localStorage.removeItem(STORAGE_KEY_DATA);
-                localStorage.removeItem(STORAGE_KEY_TAB_COUNT);
-
-                // 2. Seite neu laden, um die App im Initialzustand zu starten (nur "Tour 1")
-                window.location.reload();
+                tourStops = [
+                    {address: DEFAULT_START_ADDRESS, drive:0, dist:0, arrMins:0, depMins:0, lat:null, lon:null}, 
+                    {address:'', drive:0, dist:0, arrMins:0, depMins:0, lat:null, lon:null}
+                ];
+                lastRoutePoints = null;
+                calculateTimes();
             };
-            // =======================================================
-            
             optBtn.onclick = optimizeRoute;
             timeSelect.onchange = calculateTimes;
 
             for(let h=0;h<24;h++) for(let m=0;m<60;m+=15) {
                 const t=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
                 const op=document.createElement('option'); op.value=t; op.textContent=t;
-                if(t===startVal) op.selected=true;
+                if(t===INITIAL_START_TIME) op.selected=true;
                 timeSelect.appendChild(op);
             }
             
             function updateStatus(msg, type) {
                 statusMsg.textContent = msg;
-                statusMsg.classList.remove('hidden');
                 statusMsg.className = `p-3 mb-4 text-sm rounded-lg ${type==='error'?'text-red-800 bg-red-50':'text-green-800 bg-green-50'}`;
-                if(!msg) statusMsg.classList.add('hidden');
             }
 
             function calculateTimes() {
@@ -480,21 +351,28 @@
                     let arrival = 0;
                     
                     if(i===0) {
+                        // 1. Startstopp: Ankunft ist "---", Abfahrt ist die gewählte Startzeit
                         arrival = startMins;
                         s.arrMins = startMins; 
                         s.depMins = startMins; 
                     } else {
                         const prevStop = tourStops[i-1];
+                        // 2. Ankunft = Abfahrt des vorherigen Stopps + Fahrzeit zum aktuellen Stopp
                         arrival = prevStop.depMins + (s.drive || 0); 
-                        arrival = Math.ceil(arrival/5)*5; 
+                        arrival = Math.ceil(arrival/5)*5; // Aufrunden auf 5-Minuten-Schritte
                         s.arrMins = arrival;
+                        
+                        // 3. Abfahrt = Ankunft + Servicezeit (BUFFER_MINUTES)
                         s.depMins = s.arrMins + BUFFER_MINUTES;
                     }
                     
+                    // Formatierung der Ankunftszeit
                     const hArr = Math.floor(s.arrMins/60)%24;
                     const mArr = s.arrMins%60;
+                    // Der Startstopp zeigt keine sinnvolle Ankunftszeit an
                     s.arrStr = i===0 ? '---' : `${String(hArr).padStart(2,'0')}:${String(mArr).padStart(2,'0')}`;
 
+                    // Formatierung der Abfahrtszeit
                     const hDep = Math.floor(s.depMins/60)%24;
                     const mDep = s.depMins%60;
                     s.depStr = `${String(hDep).padStart(2,'0')}:${String(mDep).padStart(2,'0')}`;
@@ -505,87 +383,57 @@
 
                 render();
                 
+                // Berechnung der Gesamtdauer basierend auf der Abfahrtszeit des LETZTEN Stopps
                 const last = tourStops[tourStops.length-1];
                 const dur = last.depMins - startMins;
                 
+                // Formatiere die Gesamtsummen ebenfalls in H:MM
                 const totalDriveStr = formatTimeDuration(totalDrive);
                 const totalDurStr = formatTimeDuration(dur);
 
                 root.querySelector('.totalDrivingTime').textContent = `${totalDriveStr} h / ${totalDist.toFixed(1)} km`;
                 root.querySelector('.totalTourDuration').textContent = `${totalDurStr} h`;
-
-                saveAllData();
             }
 
             function render() {
                 updateDatalist();
-                
-                // Sortable Instanz zerstören, bevor der DOM-Inhalt ersetzt wird
-                const existingSortable = Sortable.get(container);
-                if (existingSortable) {
-                    existingSortable.destroy();
-                }
-                
                 container.innerHTML = '';
                 tourStops.forEach((s, i) => {
                     const row = document.createElement('div');
-                    row.className = 'flex items-center gap-2 p-2 bg-white border border-gray-200 rounded-lg shadow-sm';
+                    row.className = 'flex items-center gap-2 p-2 bg-white border rounded shadow-sm';
                     
+                    // Anzeige von Fahrtzeit (H:MM) UND Distanz
                     let driveInfo = '-';
                     if (i > 0) {
                         const timeStr = formatTimeDuration(s.drive);
-                        driveInfo = `<span class="block font-bold text-gray-700">${timeStr}</span>`;
+                        driveInfo = `<span class="block">${timeStr} h</span>`;
                         if (s.dist) {
-                            driveInfo += `<span class="block text-[10px] text-gray-500">${s.dist} km</span>`;
+                            driveInfo += `<span class="block text-[10px] text-gray-500">(${s.dist} km)</span>`;
                         }
                     }
 
                     row.innerHTML = `
-                        <div class="drag-handle flex items-center justify-center">
-                            <i class="fas fa-bars text-lg"></i>
+                        <div class="drag-handle text-gray-400 cursor-grab">☰</div>
+                        <div class="font-bold text-blue-600 w-6 text-center">${i+1}.</div>
+                        <input class="inp-addr flex-grow p-1 border rounded text-sm min-w-0" value="${s.address}" list="addressSuggestions" placeholder="Adresse">
+                        <div class="text-xs font-bold text-red-500 w-20 text-center leading-tight">${driveInfo}</div>
+                        <div class="text-xs font-bold w-12 text-center leading-tight">
+                            <span class="text-blue-800 block">${s.arrStr}</span>
+                            <span class="text-gray-500 block">${s.depStr}</span>
                         </div>
-                        <div class="font-bold text-blue-600 w-6 text-center text-sm select-none">${i+1}.</div>
-                        
-                        <div class="flex-grow min-w-0">
-                             <input class="inp-addr w-full p-2 border border-gray-300 rounded text-sm focus:border-blue-500 outline-none transition-colors" value="${s.address}" list="addressSuggestions" placeholder="Adresse eingeben...">
-                        </div>
-                        
-                        <div class="text-xs text-center w-16 leading-tight select-none">${driveInfo}</div>
-                        
-                        <div class="text-[11px] font-bold w-12 text-center leading-tight select-none">
-                            <span class="text-blue-800 block">Ank: ${s.arrStr}</span>
-                            <span class="text-gray-500 block">Ab: ${s.depStr}</span>
-                        </div>
-                        
-                        <button class="btn-del text-gray-300 hover:text-red-600 w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-50 transition">
-                            <i class="fas fa-times"></i>
-                        </button>
+                        <button class="btn-del text-gray-400 hover:text-red-600 w-6">🗑</button>
                     `;
                     
-                    row.querySelector('.inp-addr').onchange = (e) => { 
-                        s.address = e.target.value; 
-                        s.lat=null; 
-                        calculateTimes(); 
-                    };
+                    row.querySelector('.inp-addr').onchange = (e) => { s.address = e.target.value; s.lat=null; };
                     row.querySelector('.btn-del').onclick = () => { 
                         if(tourStops.length > 1) { tourStops.splice(i, 1); calculateTimes(); }
                     };
                     container.appendChild(row);
                 });
                 
-                // Sortable Instanz NEU initialisieren
                 new Sortable(container, {
                     handle: '.drag-handle',
-                    animation: 250,
-                    delay: 150, 
-                    delayOnTouchOnly: true, 
-                    touchStartThreshold: 5, 
-                    fallbackTolerance: 3,
-                    ghostClass: 'sortable-ghost',
-                    dragClass: 'sortable-drag',
-                    onStart: function(evt) {
-                        if (window.navigator.vibrate) window.navigator.vibrate(50);
-                    },
+                    animation: 150,
                     onEnd: (evt) => {
                         const item = tourStops.splice(evt.oldIndex, 1)[0];
                         tourStops.splice(evt.newIndex, 0, item);
@@ -608,11 +456,10 @@
 
             async function optimizeRoute() {
                 const valid = tourStops.filter(s => s.address.trim().length > 3);
-                if(valid.length < 2) return updateStatus("Mindestens 2 Adressen nötig.", 'error');
+                if(valid.length < 2) return updateStatus("Zu wenig Adressen", 'error');
                 
                 optBtn.disabled = true;
-                optBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Berechne...';
-                updateStatus("Route wird berechnet...", 'info');
+                updateStatus("Berechne...", 'info');
                 
                 try {
                     for(let s of valid) {
@@ -628,7 +475,7 @@
                     const res = await fetch(url);
                     const data = await res.json();
                     
-                    if(!data.routes) throw new Error("Keine Route gefunden");
+                    if(!data.routes) throw new Error("Keine Route");
 
                     const route = data.routes[0];
                     
@@ -645,15 +492,16 @@
                         }
                     }
 
+                    // Fahrzeiten UND Distanzen eintragen
                     for(let i=0; i<route.legs.length; i++) {
                         if(tourStops[i+1]) {
                             const legSummary = route.legs[i].summary;
                             tourStops[i+1].drive = Math.ceil(legSummary.travelTimeInSeconds/60);
                             tourStops[i+1].dist = (legSummary.lengthInMeters / 1000).toFixed(1);
-                            saveAddressToHistory(tourStops[i+1].address);
+                            saveAddress(tourStops[i+1].address);
                         }
                     }
-                    saveAddressToHistory(tourStops[0].address);
+                    saveAddress(tourStops[0].address);
 
                     const allPoints = [];
                     route.legs.forEach(leg => {
@@ -663,23 +511,18 @@
                     lastRoutePoints = allPoints;
                     drawRouteOnMap(allPoints, tourStops);
 
-                    calculateTimes(); 
-                    updateStatus("Route optimiert!", 'success');
-                    
-                    if(window.innerWidth < 768) {
-                        setTimeout(toggleMobileView, 1000);
-                    }
+                    calculateTimes();
+                    updateStatus("Fertig!", 'success');
 
                 } catch(e) {
                     console.error(e);
                     updateStatus("Fehler: " + e.message, 'error');
                 } finally {
                     optBtn.disabled = false;
-                    optBtn.innerHTML = '<i class="fas fa-route"></i> Optimieren';
                 }
             }
 
-            calculateTimes(); 
+            calculateTimes();
             
             return {
                 id,
@@ -689,7 +532,7 @@
         }
 
         initMap(); 
-        loadAllData();
+        addNewTab();
     </script>
 </body>
 </html>
