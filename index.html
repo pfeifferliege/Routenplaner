@@ -3,323 +3,329 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tourenplanung mit Statistik</title>
+    <title>Klinik-Tourenplaner Profi</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script> 
-    
     <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
     
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
-        input, select { font-size: 16px !important; }
-
-        .calculator-scroll-area { 
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            overflow-y: scroll; 
-            -webkit-overflow-scrolling: touch; 
-            display: block;
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            touch-action: manipulation;
         }
-        .action-area { padding-bottom: 250px; }
+
+        .calculator-scroll-area {
+            overflow-y: auto;
+            height: 100%;
+            padding-bottom: 5rem;
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: white;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+
         #map-display { width: 100%; height: 100%; z-index: 1; } 
-        .tab-btn.active { background-color: white; border-top: 3px solid #1e40af; color: #1e40af; font-weight: 700; }
-        .tab-btn:not(.active) { background-color: #e5e7eb; color: #6b7280; }
-        .drag-handle { cursor: grab; padding: 12px; color: #9ca3af; touch-action: none; display: flex; align-items: center; }
-        .editable-title { border-bottom: 2px dashed #cbd5e1; transition: all 0.2s; }
-        .mobile-view-transition { transition: transform 0.3s ease-in-out; }
+
+        .tab-btn.active {
+            background-color: white;
+            border-top: 3px solid #1e40af;
+            color: #1e40af;
+            font-weight: 700;
+        }
+
+        .drag-handle { cursor: grab; color: #d1d5db; padding: 10px; }
+
+        /* Mobile Switcher */
+        @media (max-width: 768px) {
+            .view-hidden { display: none !important; }
+            .mobile-nav { display: flex !important; }
+        }
+
+        /* Status-Farben */
+        .status-urgent { border-left: 8px solid #ef4444 !important; } 
+        .status-soon { border-left: 8px solid #f59e0b !important; }   
+        .status-relaxed { border-left: 8px solid #10b981 !important; } 
+        .anreise-card { border-left: 8px solid #ef4444 !important; background-color: #fef2f2 !important; } /* Rot für Anreise */
+        .abreise-card { border-left: 8px solid #3b82f6 !important; background-color: #eff6ff !important; } /* Blau für Abreise */
+        .bg-wegpunkt { background-color: #ecfdf5 !important; border-left: 8px solid #059669 !important; }
+
+        @media print {
+            .no-print { display: none !important; }
+            #print-container { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
+        }
     </style>
 </head>
-<body class="h-screen flex flex-col overflow-hidden bg-f3f4f6">
+<body class="h-screen flex flex-col overflow-hidden">
 
-    <div class="bg-white border-b border-gray-300 flex-none z-30 shadow-sm">
-        <div class="w-full mx-auto px-4 py-3 flex justify-between items-center">
-            <h1 class="text-lg font-extrabold text-gray-700">Tourenplanung</h1>
-            <button onclick="addNewTab()" class="bg-blue-600 text-white font-bold py-1.5 px-3 rounded shadow text-sm">
-                <i class="fas fa-plus mr-1"></i> Neu
-            </button>
+    <div class="bg-white border-b border-gray-300 flex-none z-20 shadow-sm no-print">
+        <div class="w-full px-4 py-2 flex flex-col md:flex-row justify-between items-center gap-2">
+            <h1 class="text-lg font-extrabold text-gray-700 italic">Teufelsbad Planer</h1>
+            <div class="flex flex-wrap gap-1">
+                <button onclick="printAllTours()" class="bg-gray-800 text-white text-[9px] font-bold py-1 px-2 rounded uppercase">🖨 Touren</button>
+                <button onclick="showPatientMemory()" class="bg-amber-500 text-white text-[9px] font-bold py-1 px-2 rounded uppercase">Speicher</button>
+                <button onclick="addNewTab()" class="bg-blue-600 text-white text-[9px] font-bold py-1 px-2 rounded uppercase">Auto +</button>
+            </div>
         </div>
     </div>
 
-    <div class="flex-grow relative w-full overflow-hidden md:flex"> 
-        <div id="list-panel" class="mobile-view-transition absolute inset-0 z-20 w-full h-full bg-white md:static md:w-1/2 md:border-r border-gray-300 flex flex-col">
-            <div class="bg-gray-100 border-b border-gray-300 px-2 pt-2 flex-none">
-                <div id="tabs-header" class="flex space-x-1 overflow-x-auto no-scrollbar"></div>
-            </div>
-            <div id="tabs-content" class="flex-grow relative"></div>
+    <div class="flex-grow flex flex-col md:flex-row h-full overflow-hidden w-full no-print relative"> 
+        <div id="view-list" class="flex flex-col h-full w-full md:w-1/2 border-r border-gray-300 overflow-hidden">
+            <div id="tabs-header" class="bg-gray-100 border-b border-gray-300 px-4 pt-2 flex space-x-1 overflow-x-auto no-scrollbar flex-none"></div>
+            <div id="tabs-content" class="flex-grow relative overflow-hidden"></div>
         </div>
-        <div id="map-container" class="absolute inset-0 z-10 w-full h-full md:static md:w-1/2 bg-gray-200">
+        
+        <div id="view-map" class="hidden md:block h-full w-full md:w-1/2 relative border-l border-gray-300">
             <div id="map-display"></div>
+            <div class="absolute bottom-2 left-2 z-[1000] bg-white/80 px-2 py-1 rounded text-[10px] font-bold text-gray-600 shadow">
+                Tipp: Klick in Karte setzt Wegpunkt
+            </div>
         </div>
-        <button id="mobileToggleBtn" onclick="toggleMobileView()" class="md:hidden fixed bottom-6 right-6 z-50 bg-blue-700 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center border-2 border-white">
-            <i class="fas fa-map-marked-alt text-xl"></i>
+    </div>
+
+    <div class="mobile-nav hidden fixed bottom-0 left-0 w-full h-16 bg-white border-t border-gray-300 z-[100] flex justify-around items-center no-print">
+        <button onclick="switchMobileView('list')" id="nav-list-btn" class="flex flex-col items-center text-blue-600 font-bold">
+            <span class="text-xl">📋</span>
+            <span class="text-[10px] uppercase">Liste</span>
+        </button>
+        <button onclick="switchMobileView('map')" id="nav-map-btn" class="flex flex-col items-center text-gray-400 font-bold">
+            <span class="text-xl">📍</span>
+            <span class="text-[10px] uppercase">Karte</span>
         </button>
     </div>
 
-    <datalist id="addressSuggestions"></datalist>
+    <div id="print-container" class="hidden"></div>
+    <div id="memoryModal" class="hidden fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-0 md:p-4 no-print">
+        <div class="bg-white rounded-none md:rounded-xl p-4 md:p-6 w-full max-w-6xl h-full md:max-h-[95vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold">Patientenliste</h3>
+                <button onclick="document.getElementById('memoryModal').classList.add('hidden')" class="text-2xl">✕</button>
+            </div>
+            <div class="bg-blue-50 p-4 rounded-xl mb-4 border border-blue-100 shrink-0">
+                 <div class="grid grid-cols-2 md:grid-cols-3 gap-2 mb-2">
+                    <input id="mem-name" class="p-2 text-sm border rounded font-bold" placeholder="Name">
+                    <input id="mem-addr" class="p-2 text-sm border rounded" placeholder="Adresse">
+                    <input id="mem-date" type="date" class="p-2 text-sm border rounded font-bold">
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="addManualToMemory('anreise')" class="flex-1 bg-red-600 text-white py-2 rounded font-bold text-xs uppercase shadow-md">Als ANREISE speichern</button>
+                    <button onclick="addManualToMemory('abreise')" class="flex-1 bg-blue-600 text-white py-2 rounded font-bold text-xs uppercase shadow-md">Als ABREISE speichern</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-hidden flex-grow">
+                <div class="flex flex-col border rounded-lg bg-gray-50 overflow-hidden">
+                    <h4 class="bg-blue-600 text-white p-2 text-[10px] font-bold uppercase text-center italic">Abreisen (Blau)</h4>
+                    <div id="memoryListAbreise" class="overflow-y-auto p-2 space-y-2 flex-grow"></div>
+                </div>
+                <div class="flex flex-col border rounded-lg bg-gray-50 overflow-hidden">
+                    <h4 class="bg-red-600 text-white p-2 text-[10px] font-bold uppercase text-center italic">Anreisen (Rot)</h4>
+                    <div id="memoryListAnreise" class="overflow-y-auto p-2 space-y-2 flex-grow"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script>
         const TOMTOM_API_KEY = "SiBGVPRYbkR0dbKAMIrdoZYd4BDGkP9c"; 
-        const BUFFER_MINUTES = 10;
-        const INITIAL_START_TIME = "08:15";
         const DEFAULT_START_ADDRESS = "Michaelstein 18, 38889 Blankenburg"; 
-        const STORAGE_KEY = "tourPlanner_savedAddresses";
+        let currentMap = null, routeLayers = [], markerLayers = [], instanceData = [], tabCounter = 0, activeTabId = null;
 
-        let currentMap = null;
-        let routeLayer = null;  
-        let markerLayers = [];  
-        let tabCounter = 0;
-        let isListView = true;
+        function switchMobileView(view) {
+            const list = document.getElementById('view-list');
+            const map = document.getElementById('view-map');
+            const navList = document.getElementById('nav-list-btn');
+            const navMap = document.getElementById('nav-map-btn');
 
-        function getSavedAddresses() {
-            const data = localStorage.getItem(STORAGE_KEY);
-            return data ? JSON.parse(data) : [];
-        }
-
-        function saveAddressesToHistory(stops) {
-            let history = getSavedAddresses();
-            let changed = false;
-            stops.forEach(s => {
-                const addr = s.address ? s.address.trim() : "";
-                if (addr.length > 5 && !history.includes(addr)) {
-                    history.push(addr);
-                    changed = true;
-                }
-            });
-            if (changed) {
-                if (history.length > 50) history = history.slice(-50);
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
-                updateDatalist();
-            }
-        }
-
-        function updateDatalist() {
-            const history = getSavedAddresses();
-            const dl = document.getElementById('addressSuggestions');
-            if (dl) dl.innerHTML = history.map(addr => `<option value="${addr}">`).join('');
-        }
-
-        function toggleMobileView() {
-            const listPanel = document.getElementById('list-panel');
-            const btn = document.getElementById('mobileToggleBtn');
-            if (isListView) {
-                listPanel.style.transform = "translateX(-100%)";
-                btn.innerHTML = '<i class="fas fa-list-ul text-xl"></i>';
-                isListView = false;
-                setTimeout(() => { if(currentMap) currentMap.invalidateSize(); }, 350);
+            if(view === 'list') {
+                list.classList.remove('view-hidden'); map.classList.add('hidden'); map.classList.remove('md:block');
+                navList.classList.add('text-blue-600'); navList.classList.remove('text-gray-400');
+                navMap.classList.remove('text-blue-600'); navMap.classList.add('text-gray-400');
             } else {
-                listPanel.style.transform = "translateX(0)";
-                btn.innerHTML = '<i class="fas fa-map-marked-alt text-xl"></i>';
-                isListView = true;
+                list.classList.add('view-hidden'); map.classList.remove('hidden'); map.classList.add('block');
+                navMap.classList.add('text-blue-600'); navMap.classList.remove('text-gray-400');
+                navList.classList.remove('text-blue-600'); navList.classList.add('text-gray-400');
+                if(currentMap) setTimeout(() => currentMap.invalidateSize(), 100);
             }
         }
 
         function initMap() {
             if (currentMap) return;
-            currentMap = L.map('map-display', { zoomControl: false }).setView([51.833, 10.790], 12);
-            L.control.zoom({ position: 'topright' }).addTo(currentMap);
+            currentMap = L.map('map-display').setView([51.833, 10.790], 12);
             L.tileLayer(`https://api.tomtom.com/map/1/tile/basic/main/{z}/{x}/{y}.png?key=${TOMTOM_API_KEY}`).addTo(currentMap);
+            
+            // Klick-Variante A: Manueller Wegpunkt
+            currentMap.on('click', async (e) => {
+                const { lat, lng } = e.latlng;
+                const inst = instanceData.find(i => i.id === activeTabId);
+                if (!inst) return;
+                try {
+                    const res = await fetch(`https://api.tomtom.com/search/2/reverseGeocode/${lat},${lng}.json?key=${TOMTOM_API_KEY}`);
+                    const data = await res.json();
+                    const addr = data.addresses?.[0]?.address?.freeformAddress || `${lat.toFixed(4)},${lng.toFixed(4)}`;
+                    inst.addManualStop(addr, "Wegpunkt", "wegpunkt", lat, lng);
+                } catch(err) { console.error(err); }
+            });
         }
 
-        const calculatorTemplate = `
-            <div class="calculator-scroll-area px-4 pt-4">
-                <div class="mb-4"><h2 class="text-xl font-bold text-blue-900 editable-title px-1 py-1 inline-block min-w-[100px]" contenteditable="true">Tour Name</h2></div>
-                <div class="mb-4 p-4 bg-blue-50 rounded-xl border border-blue-200 shadow-sm">
-                    <label class="block text-xs font-bold text-blue-800 uppercase mb-1">⏱️ Startzeit</label>
-                    <select class="startTime w-full p-2 border border-blue-300 rounded-lg font-mono mb-2"></select>
-                </div>
-                <div class="stopsContainer space-y-2"></div>
-                
-                <div class="statsBox hidden mt-6 p-4 bg-white border border-gray-200 rounded-xl shadow-sm space-y-2">
-                    <div class="flex justify-between text-sm text-gray-600"><span>Gesamtdauer (m. Puffer):</span> <span class="font-bold text-blue-900" id="totalDuration">--</span></div>
-                    <div class="flex justify-between text-sm text-gray-600"><span>Reine Fahrzeit:</span> <span class="font-bold text-gray-800" id="pureDriveTime">--</span></div>
-                    <div class="flex justify-between text-sm text-gray-600"><span>Gesamtstrecke:</span> <span class="font-bold text-gray-800" id="totalDistance">--</span></div>
-                </div>
+        function drawRouteOnMap(legsData, stops) {
+            if (!currentMap) initMap();
+            routeLayers.forEach(l => currentMap.removeLayer(l)); routeLayers = [];
+            markerLayers.forEach(m => currentMap.removeLayer(m)); markerLayers = [];
 
-                <div class="action-area mt-6 flex flex-col gap-3">
-                    <button class="addBtn w-full py-3 bg-green-600 text-white font-bold rounded-lg shadow"><i class="fas fa-plus mr-2"></i>Stopp dazu</button>
-                    <button class="updateBtn w-full py-3 bg-blue-600 text-white font-bold rounded-lg shadow"><i class="fas fa-route mr-2"></i>Anzeigen & Berechnen</button>
-                    <div class="border-t border-gray-200 mt-4 pt-4">
-                        <button class="resetBtn w-full py-3 bg-red-100 text-red-700 font-bold rounded-lg border border-red-200"><i class="fas fa-trash-alt mr-2"></i> Tour zurücksetzen</button>
-                    </div>
-                </div>
-            </div>
-        `;
+            legsData.forEach((leg, index) => {
+                const toStop = stops[index + 1];
+                let color = '#94a3b8'; // Standard Grau
+                if (toStop?.type === 'anreise') color = '#ef4444'; // ROT für Anreise
+                if (toStop?.type === 'abreise') color = '#3b82f6'; // BLAU für Abreise
+                if (toStop?.type === 'wegpunkt') color = '#059669'; // GRÜN für Wegpunkt
 
-        function addNewTab() {
-            tabCounter++;
-            const id = tabCounter;
-            const tabBtn = document.createElement('div');
-            tabBtn.id = `tab-btn-${id}`;
-            tabBtn.className = `tab-btn cursor-pointer px-4 py-2 rounded-t-lg border border-gray-300 text-sm flex items-center shrink-0`;
-            tabBtn.innerHTML = `<span class="tab-label mr-2">Tour ${id}</span><span class="px-1 hover:text-red-500 font-bold" onclick="this.parentElement.remove()">✕</span>`;
-            tabBtn.onclick = (e) => { if(e.target.tagName !== 'SPAN' || !e.target.innerText.includes('✕')) switchTab(id); };
+                const poly = L.polyline(leg, { color: color, weight: 6, opacity: 0.8 }).addTo(currentMap);
+                routeLayers.push(poly);
+            });
+
+            stops.forEach((stop, index) => {
+                if (stop.lat && stop.lon) {
+                    let color = '#1e40af';
+                    if (stop.type === 'anreise') color = '#ef4444';
+                    if (stop.type === 'abreise') color = '#3b82f6';
+                    if (stop.type === 'klinik') color = '#d4af37';
+                    const marker = L.marker([stop.lat, stop.lon], { icon: L.divIcon({ className: '', html: `<div style="background-color: ${color}; color: white; border-radius: 50%; width: 22px; height: 22px; line-height: 22px; text-align: center; font-weight: bold; border: 2px solid white; font-size: 10px;">${index + 1}</div>` }) }).addTo(currentMap);
+                    markerLayers.push(marker);
+                }
+            });
+            if (markerLayers.length > 0) currentMap.fitBounds(new L.FeatureGroup(markerLayers).getBounds(), { padding: [40, 40] });
+        }
+
+        function addManualToMemory(type) {
+            const name = document.getElementById('mem-name').value;
+            const addr = document.getElementById('mem-addr').value;
+            const date = document.getElementById('mem-date').value;
+            if (!name || !addr) return alert("Name/Adresse fehlen");
+            let memory = JSON.parse(localStorage.getItem('patientMemory') || '[]');
+            memory.push({ id: "ID-"+Date.now(), name, address: addr, arrivalDate: date, status: type });
+            localStorage.setItem('patientMemory', JSON.stringify(memory));
+            showPatientMemory();
+        }
+
+        function showPatientMemory() {
+            const listAnreise = document.getElementById('memoryListAnreise');
+            const listAbreise = document.getElementById('memoryListAbreise');
+            let memory = JSON.parse(localStorage.getItem('patientMemory') || '[]');
+            listAnreise.innerHTML = ''; listAbreise.innerHTML = '';
             
-            const contentDiv = document.createElement('div');
-            contentDiv.id = `tab-content-${id}`;
-            contentDiv.className = 'hidden h-full w-full absolute inset-0'; 
-            contentDiv.innerHTML = calculatorTemplate;
+            memory.forEach(p => {
+                const card = `<div class="p-2 border rounded bg-white shadow-sm text-xs ${p.status === 'anreise' ? 'anreise-card' : 'abreise-card'}">
+                    <div class="flex justify-between font-bold"><span>${p.name}</span> <button onclick="loadFromMemory('${p.id}')" class="bg-black text-white px-2 py-0.5 rounded text-[9px]">LADEN</button></div>
+                    <div class="text-[10px] text-gray-500">${p.address}</div>
+                </div>`;
+                if(p.status === 'anreise') listAnreise.innerHTML += card; else listAbreise.innerHTML += card;
+            });
+            document.getElementById('memoryModal').classList.remove('hidden');
+        }
 
-            const titleElem = contentDiv.querySelector('.editable-title');
-            titleElem.innerText = `Tour ${id}`;
-            titleElem.oninput = () => { tabBtn.querySelector('.tab-label').innerText = titleElem.innerText.trim() || `Tour ${id}`; };
+        window.loadFromMemory = (pid) => {
+            let memory = JSON.parse(localStorage.getItem('patientMemory') || '[]');
+            const p = memory.find(x => x.id === pid);
+            const inst = instanceData.find(i => i.id === activeTabId);
+            if(inst && p) {
+                inst.addManualStop(p.address, p.name, p.status);
+                document.getElementById('memoryModal').classList.add('hidden');
+            }
+        };
 
-            document.getElementById('tabs-header').appendChild(tabBtn);
-            document.getElementById('tabs-content').appendChild(contentDiv);
-            initCalculatorInstance(contentDiv, id);
+        function addNewTab(saved = null) {
+            tabCounter++; const id = saved ? saved.id : tabCounter;
+            const btn = document.createElement('div');
+            btn.id = `tab-btn-${id}`; btn.className = `tab-btn cursor-pointer px-4 py-2 rounded-t-lg border border-b-0 flex items-center gap-2 text-xs transition-all active`;
+            btn.innerHTML = `<span>Auto ${id}</span>`; btn.onclick = () => switchTab(id);
+            document.getElementById('tabs-header').appendChild(btn);
+
+            const cont = document.createElement('div');
+            cont.id = `tab-content-${id}`; cont.className = 'hidden h-full absolute inset-0';
+            cont.innerHTML = `<div class="calculator-scroll-area p-4">
+                <h2 class="text-xl font-bold tour-title" contenteditable="true">Auto ${id}</h2>
+                <div class="mt-2 mb-4 flex gap-2"><span class="km-display text-[10px] font-bold bg-blue-50 p-1 rounded">0 km</span></div>
+                <div class="stopsContainer space-y-2"></div>
+                <button class="addStopBtn w-full py-2 bg-gray-100 text-xs font-bold mt-4 uppercase">+ Stopp</button>
+                <button class="optBtn w-full py-4 bg-blue-600 text-white font-bold rounded mt-2 uppercase shadow-lg">📍 Route Berechnen</button>
+            </div>`;
+            document.getElementById('tabs-content').appendChild(cont);
+            instanceData.push(initInstance(cont, id, saved));
             switchTab(id);
         }
 
         function switchTab(id) {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            activeTabId = id;
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active', 'bg-white', 'border-t-4'));
+            document.getElementById(`tab-btn-${id}`).classList.add('active', 'bg-white', 'border-t-4');
             document.querySelectorAll('#tabs-content > div').forEach(d => d.classList.add('hidden'));
-            document.getElementById(`tab-btn-${id}`).classList.add('active');
             document.getElementById(`tab-content-${id}`).classList.remove('hidden');
+            const inst = instanceData.find(i => i.id === id);
+            if(inst) drawRouteOnMap(inst.legsData, inst.tourStops);
         }
 
-        function initCalculatorInstance(root, id) {
-            let tourStops = [{address: DEFAULT_START_ADDRESS, drive:0}, {address:'', drive:0}, {address:'', drive:0}];
+        function initInstance(root, id, saved = null) {
+            let tourStops = saved ? saved.tourStops : [{address: DEFAULT_START_ADDRESS, type:'klinik', name:'Klinik'}];
+            let legsData = saved ? saved.legsData : [];
             const container = root.querySelector('.stopsContainer');
-            const timeSelect = root.querySelector('.startTime');
-
-            for(let h=0; h<24; h++) for(let m=0; m<60; m+=15) {
-                const t=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-                timeSelect.innerHTML += `<option value="${t}" ${t===INITIAL_START_TIME?'selected':''}>${t}</option>`;
-            }
-
-            new Sortable(container, {
-                handle: '.drag-handle',
-                animation: 200,
-                onEnd: () => {
-                    const rows = Array.from(container.querySelectorAll('.stop-row'));
-                    const newStops = rows.map(row => tourStops[parseInt(row.dataset.id)]);
-                    tourStops = newStops;
-                    render();
-                }
-            });
-
+            
             function render() {
                 container.innerHTML = '';
                 tourStops.forEach((s, i) => {
-                    const row = document.createElement('div');
-                    row.className = 'stop-row flex items-center gap-2 p-2 bg-white border border-gray-200 rounded-lg shadow-sm';
-                    row.dataset.id = i;
-                    row.innerHTML = `
-                        <div class="drag-handle"><i class="fas fa-bars"></i></div>
-                        <div class="font-bold text-blue-600 w-5 text-sm">${i+1}.</div>
-                        <input class="flex-grow p-2 border rounded text-sm min-w-0" value="${s.address || ''}" list="addressSuggestions" placeholder="Adresse...">
-                        <div class="text-[11px] font-bold text-blue-800 w-10 text-center">${s.arrStr || '--:--'}</div>
-                        <button class="text-gray-300 px-2" onclick="removeStop(${i})">✕</button>
-                    `;
-                    row.querySelector('input').addEventListener('input', (e) => { s.address = e.target.value; });
-                    container.appendChild(row);
+                    const div = document.createElement('div');
+                    let colorClass = s.type === 'anreise' ? 'border-red-500 bg-red-50' : (s.type === 'abreise' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-white');
+                    div.className = `p-2 border-l-4 ${colorClass} rounded shadow-sm flex items-center gap-2 text-xs`;
+                    div.innerHTML = `<div class="drag-handle text-gray-300">⋮</div>
+                        <div class="flex-grow">
+                            <input class="w-full font-bold bg-transparent outline-none" value="${s.address}" onchange="tourStops[${i}].address=this.value; tourStops[${i}].lat=null">
+                            <div class="flex gap-2 text-[9px] mt-1">
+                                <select onchange="tourStops[${i}].type=this.value; render()" class="border rounded px-1">
+                                    <option value="anreise" ${s.type==='anreise'?'selected':''}>🚚 ANREISE</option>
+                                    <option value="abreise" ${s.type==='abreise'?'selected':''}>🏠 ABREISE</option>
+                                    <option value="wegpunkt" ${s.type==='wegpunkt'?'selected':''}>📍 WEGPUNKT</option>
+                                    <option value="klinik" ${s.type==='klinik'?'selected':''}>🏥 KLINIK</option>
+                                </select>
+                                <input class="italic bg-transparent" value="${s.name}" oninput="tourStops[${i}].name=this.value" placeholder="Name...">
+                            </div>
+                        </div>
+                        <button onclick="instanceData.find(x=>x.id===${id}).removeStop(${i})" class="text-gray-300 hover:text-red-500">✕</button>`;
+                    container.appendChild(div);
                 });
             }
 
-            window.removeStop = (index) => {
-                if(tourStops.length > 1) {
-                    tourStops.splice(index, 1);
-                    render();
-                }
-            };
-
-            async function updateRoute() {
-                saveAddressesToHistory(tourStops);
-                const valid = tourStops.filter(s => s.address.trim().length > 3);
-                if (valid.length < 2) return;
-
-                try {
-                    const coords = [];
-                    for(let s of valid) {
+            async function optimize() {
+                root.querySelector('.optBtn').innerText = "Wird berechnet...";
+                for (let s of tourStops) {
+                    if (!s.lat) {
                         const res = await fetch(`https://api.tomtom.com/search/2/search/${encodeURIComponent(s.address)}.json?key=${TOMTOM_API_KEY}&limit=1`);
-                        const data = await res.json();
-                        const pos = data.results[0].position;
-                        coords.push(pos);
-                        s.lat = pos.lat; s.lon = pos.lon;
+                        const d = await res.json();
+                        if (d.results?.[0]) { s.lat = d.results[0].position.lat; s.lon = d.results[0].position.lon; }
                     }
-
-                    const locs = coords.map(c => `${c.lat},${c.lon}`).join(':');
-                    const res = await fetch(`https://api.tomtom.com/routing/1/calculateRoute/${locs}/json?key=${TOMTOM_API_KEY}`);
-                    const data = await res.json();
-                    
-                    const route = data.routes[0];
-                    let totalSeconds = 0;
-                    let totalMeters = 0;
-                    let currentIdx = 0;
-
-                    tourStops.forEach((s) => {
-                        if(s.address.trim().length > 3) {
-                            if(currentIdx > 0) {
-                                const leg = route.legs[currentIdx-1];
-                                s.drive = Math.ceil(leg.summary.travelTimeInSeconds/60);
-                                totalSeconds += leg.summary.travelTimeInSeconds;
-                                totalMeters += leg.summary.lengthInMeters;
-                            }
-                            currentIdx++;
-                        }
-                    });
-
-                    // Zeitberechnung mit Puffer
-                    const startMins = parseInt(timeSelect.value.split(':')[0])*60 + parseInt(timeSelect.value.split(':')[1]);
-                    let currentMins = startMins;
-                    tourStops.forEach((s, i) => {
-                        if(s.address.trim().length > 3) {
-                            if(i > 0) {
-                                currentMins += (s.drive || 0);
-                                currentMins = Math.ceil(currentMins/5)*5;
-                                s.arrStr = `${Math.floor(currentMins/60)%24}:${String(currentMins%60).padStart(2,'0')}`;
-                                currentMins += BUFFER_MINUTES;
-                            } else { s.arrStr = 'Start'; }
-                        } else { s.arrStr = '--:--'; }
-                    });
-
-                    // Statistik-Update
-                    const totalDurationMins = currentMins - BUFFER_MINUTES - startMins;
-                    root.querySelector('#totalDuration').innerText = `${Math.floor(totalDurationMins/60)}h ${totalDurationMins%60}min`;
-                    root.querySelector('#pureDriveTime').innerText = `${Math.floor(totalSeconds/3600)}h ${Math.floor((totalSeconds%3600)/60)}min`;
-                    root.querySelector('#totalDistance').innerText = `${(totalMeters/1000).toFixed(1)} km`;
-                    root.querySelector('.statsBox').classList.remove('hidden');
-
-                    if (routeLayer) currentMap.removeLayer(routeLayer);
-                    markerLayers.forEach(m => currentMap.removeLayer(m));
-                    markerLayers = [];
-
-                    const points = [];
-                    route.legs.forEach(l => l.points.forEach(p => points.push([p.latitude, p.longitude])));
-                    routeLayer = L.polyline(points, {color: 'blue', weight: 5}).addTo(currentMap);
-                    
-                    tourStops.forEach((s, i) => {
-                        if(s.lat && s.address.trim().length > 3) {
-                            const m = L.marker([s.lat, s.lon]).addTo(currentMap).bindPopup(`${i+1}. ${s.address}`);
-                            markerLayers.push(m);
-                        }
-                    });
-
-                    currentMap.fitBounds(routeLayer.getBounds(), {padding: [30, 30]});
-                    render();
-                } catch(e) { console.log(e); }
+                }
+                const coords = tourStops.filter(s=>s.lat).map(s => s.lat + ',' + s.lon).join(':');
+                const routeRes = await fetch(`https://api.tomtom.com/routing/1/calculateRoute/${coords}/json?key=${TOMTOM_API_KEY}&routeType=shortest`);
+                const routeData = await routeRes.json();
+                legsData = routeData.routes[0].legs.map(l => l.points.map(p => [p.latitude, p.longitude]));
+                root.querySelector('.km-display').innerText = (routeData.routes[0].summary.lengthInMeters / 1000).toFixed(1) + " km";
+                drawRouteOnMap(legsData, tourStops);
+                root.querySelector('.optBtn').innerText = "📍 Route Berechnen";
             }
 
-            root.querySelector('.addBtn').onclick = () => { tourStops.push({address:'', drive:0}); render(); };
-            root.querySelector('.updateBtn').onclick = updateRoute;
-            root.querySelector('.resetBtn').onclick = () => { 
-                if(confirm('Tour zurücksetzen?')) { 
-                    tourStops = [{address: DEFAULT_START_ADDRESS, drive:0}, {address:'', drive:0}, {address:'', drive:0}]; 
-                    root.querySelector('.statsBox').classList.add('hidden');
-                    render(); 
-                }
-            };
-            
+            root.querySelector('.addStopBtn').onclick = () => { tourStops.push({address: '', type: 'abreise', name: ''}); render(); };
+            root.querySelector('.optBtn').onclick = optimize;
             render();
+
+            return { id, tourStops, legsData, 
+                addManualStop: (a, n, t, lat, lon) => { tourStops.push({address:a, name:n, type:t, lat, lon}); render(); optimize(); },
+                removeStop: (i) => { tourStops.splice(i, 1); render(); }
+            };
         }
 
-        updateDatalist();
-        initMap(); 
-        addNewTab();
+        window.onload = () => { addNewTab(); initMap(); };
     </script>
 </body>
 </html>
